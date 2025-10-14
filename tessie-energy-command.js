@@ -29,13 +29,16 @@ module.exports = function(RED) {
                         });
                         clearTimeout(timeout);
                         const data = await response.json();
+
+                        msg.payload = data;
+
                         msg.api_call = {
                             method: options.method,
                             url: options.url,
                             body: options.body,
-                            headers: options.headers
+                            headers: options.headers,
                         }
-                        msg.response = data;
+                        
                     } catch (error) {
                         msg.response = `Fetch error: ${error.name} - ${error.message}`;
                         msg.api_call = {

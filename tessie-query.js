@@ -69,7 +69,7 @@ const sendApiCall = async function(options) {
             }
         } else {
             const data = await response.json();
-            msg.response = data;
+            msg.payload = data;
         }
 
         msg.api_call = {

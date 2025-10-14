@@ -36,7 +36,7 @@ module.exports = function(RED) {
                                 body: options.body,
                                 headers: options.headers
                             }
-                            msg.response = data;
+                            msg.payload = data;
                         } catch (error) {
                             msg.response = `Fetch error: ${error.name} - ${error.message}`;
                             msg.api_call = {
