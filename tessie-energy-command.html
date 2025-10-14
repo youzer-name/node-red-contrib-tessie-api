@@ -1,0 +1,139 @@
+<script type="text/javascript">
+    RED.nodes.registerType('tessie-energy-command',{
+        category: 'tessie',
+        color: '#E7E7AE',
+        defaults: {
+            name: {value:""},
+            server: {value:"", type:"tessie-server"},
+            site: {value:"", type:"tessie-energy-site"},
+            command: {value:"", required:true},
+            percent: {value:"", required:false},
+            customer_preferred_export_rule: {value:"", required:false},
+            disallow_charge_from_grid_with_solar_installed: {value:"", required:false},
+            default_real_mode: {value:"", required:false},
+            enabled: {value:true, required:false}
+        },
+        inputs: 1,
+        outputs: 1,
+        icon: "font-awesome/fa-bolt",
+        align: "right",
+        label: function() {
+            return this.name||"tessie energy command";
+        },
+        paletteLabel: 'tessie energy command',
+
+            oneditprepare: function() {
+
+            // Setup typedInput for all new number fields (fractional allowed)
+            var numberFields = [
+                "#node-input-percent"
+            ];
+            numberFields.forEach(function(sel) {
+                $(sel).typedInput({type:'num',types:['num']});
+            });
+            var booleanFields = [
+                "#node-input-disallow_charge_from_grid_with_solar_installed", "#node-input-enabled"
+            ];
+            booleanFields.forEach(function(sel) {
+                $(sel).typedInput({type:'bool',types:['bool']});
+            });
+            
+            function updateFieldVisibility() {
+                var cmd = $("#node-input-command").val();
+                //hide all optional fields initially
+                
+                $("#node-input-percent").closest('.form-row').hide();
+                $("#node-input-customer_preferred_export_rule").closest('.form-row').hide();
+                $("#node-input-disallow_charge_from_grid_with_solar_installed").closest('.form-row').hide();
+                $("#node-input-default_real_mode").closest('.form-row').hide();
+                $("#node-input-enabled").closest('.form-row').hide();
+                
+                //show fields as needed based on command
+                if (cmd === "backup") {
+                    $("#node-input-percent").closest('.form-row').show();
+                } else if (cmd === "grid_import_export") {
+                    $("#node-input-customer_preferred_export_rule").closest('.form-row').show();
+                    $("#node-input-disallow_charge_from_grid_with_solar_installed").closest('.form-row').show();
+                } else if (cmd === "off_grid_vehicle_charging_reserve") {
+                    $("#node-input-percent").closest('.form-row').show();
+                } else if (cmd === "operation") {
+                    $("#node-input-default_real_mode").closest('.form-row').show();               
+                } else if (cmd === "storm_mode") {
+                    $("#node-input-enabled").closest('.form-row').show();
+                } 
+            }
+            $("#node-input-command").on('change', updateFieldVisibility);
+            updateFieldVisibility();
+        }
+
+    });
+
+</script>
+
+<script type="text/html" data-template-name="tessie-energy-command">
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-input-name" placeholder="Name">
+    </div>
+    <div class="form-row">
+        <label for="node-input-server"><i class="fa fa-tag"></i> Server</label>
+        <input type="text" id="node-input-server" placeholder="Server">
+    </div>
+    <div class="form-row">
+        <label for="node-input-site"><i class="fa fa-battery"></i> Site</label>
+        <input type="text" id="node-input-site" placeholder="Site" style="width:70%">
+    </div>
+    <div class="form-row">
+        <label for="node-input-command"><i class="fa fa-bolt"></i> Command</label>
+        <select id="node-input-command">
+            <option value="" disabled selected>Select command...</option>
+            <option value="backup">Backup</option>
+            <option value="grid_import_export">Grid Import/Export</option>
+            <option value="off_grid_vehicle_charging_reserve">Off Grid Vehicle Charging Reserve</option>
+            <option value="operation">Operation</option>
+            <option value="storm_mode">Storm Mode</option>
+        </select>
+    </div>
+    <div class="form-row">
+        <label for="node-input-percent"><i class="fa fa-sliders"></i> Percent</label>
+        <input type="number" id="node-input-percent" placeholder="">
+    </div>
+    <div class="form-row">
+        <label for="node-input-customer_preferred_export_rule"><i class="fa fa-sliders"></i> Customer Preferred Export Rule</label>
+        <select id="node-input-customer_preferred_export_rule">
+            <option value="battery_ok">Battery OK</option>
+            <option value="pv_only">PV Only</option>
+            <option value="never">Never</option>
+        </select>
+    </div>
+    <div class="form-row">
+        <label for="node-input-disallow_charge_from_grid_with_solar_installed"><i class="fa fa-sliders"></i> Disallow charge from grid with solar installed</label>
+        <input type="text" id="node-input-disallow_charge_from_grid_with_solar_installed" style="width:30%">
+    </div>
+    <div class="form-row">
+        <label for="node-input-enabled"><i class="fa fa-sliders"></i> Enabled</label>
+        <input type="text" id="node-input-enabled" style="width:30%">
+    </div>
+    <div class="form-row">
+        <label for="node-input-default_real_mode"><i class="fa fa-sliders"></i> Default Real Mode</label>
+        <select id="node-input-default_real_mode">
+            <option value="autonomous">Autonomous (time-based)</option>
+            <option value="self_consumption">Self Consumption (self-powered)</option>
+        </select>
+</script>
+
+<script type="text/html" data-help-name="tessie-energy-command">
+    <p>Send a command to a Tesla energy site via Tessie API using POST request.</p>
+    <p>Specify the command and any required parameters.</p>
+    <p><b>All values can be overriden via inbound message:</b></p>
+    <p>See https://developer.tesla.com/docs/fleet-api/endpoints/energy for the full description of all queries.</p>
+     <p>Parameters (listed alphabetically):</p>
+    <ul>
+        <li>msg.customer_preferred_export_value (battery_ok / pv_only / never)</li>
+        <li>msg.default_real_mode (autonomous / self_consumption)</li>
+        <li>msg.disallow_charge_from_grid_with_solar_installed (true / false)</li>
+        <li>msg.enabled (true / false)</li>
+        <li>msg.percent</li>
+    </ul>
+    <p>If a property is present in the inbound message, it will override the node editor value for that query.</p>
+</script>

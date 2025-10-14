@@ -1,0 +1,189 @@
+<script type="text/javascript">
+    RED.nodes.registerType('tessie-energy-query',{
+        category: 'tessie',
+        color: '#E7E7AE',
+        defaults: {
+            name: {value:""},
+            server: {value:"", type:"tessie-server"},
+            queryType: {value:"", required:true},
+            site: {value:"", type:"tessie-energy-site"},
+            start_date: {value:""},
+            end_date: {value:""},
+            timezone: {value:"local"},
+            period: {value:"day"},
+        },
+        inputs: 1,
+        outputs: 1,
+        icon: "font-awesome/fa-bolt",
+        label: function() {
+            return this.name||"tessie energy query";
+        },
+        paletteLabel: 'tessie energy query',
+
+        oneditprepare: function() {
+                function setupTimeField(fieldId) {
+                    var $input = $("#"+fieldId);
+                    var $container = $input.parent();
+                    var $dateInput = $('<input type="date" id="'+fieldId+'-date" style="width:30%; margin-left:110px; margin-right:20px" placeholder="YYYY-MM-DD">');
+                    var $timeInput = $('<input type="time" id="'+fieldId+'-time" style="width:20%" placeholder="HH:MM:SS">');
+                    $container.append($dateInput).append($timeInput);
+                    $input.typedInput({
+                        default: 'str',
+                        types:[
+                            'str'
+                        ]
+                    });
+                    function updateTimestamp() {
+                        var date = $dateInput.val();
+                        var time = $timeInput.val();
+                        if (date || time) {
+                            if (!date) {
+                                var now = new Date();
+                                date = now.toISOString().slice(0,10);
+                            }
+                            if (!time) time = "00:00:00";
+                            
+                            if($("#node-input-timezone").val() === "local") {
+                            // Adjust to UTC
+                            var indt = (date + "T" + time);
+                            var utcdt = new Date(indt).toUTCString();
+                            utcdt = new Date(utcdt).toISOString();
+                            utcdt = utcdt.slice(0,19) + "Z";
+                            } 
+                            else 
+                            {
+                                var utcdt = date + "T" + time + "Z";
+                            }
+                            var ts = utcdt
+                            // Update the typedInput field with the timestamp
+                            
+                            $input.val(ts);
+                            $input.typedInput("value", ts);
+                        }
+                    }
+                    $dateInput.on("change", function() {
+                       updateTimestamp();
+                    });
+                    $timeInput.on("change", function() {
+                        updateTimestamp();
+                    });
+                    $("#node-input-timezone").on("change", function() {
+                        updateTimestamp();
+                    });
+                }
+                // Setup each field independently
+                setupTimeField("node-input-start_date");
+                setupTimeField("node-input-end_date");
+
+            // Hide all fields except server, queryType until a query type is selected
+            var allFields = [
+                '#node-input-site','#node-input-start_date', '#node-input-end_date', '#node-input-timezone', '#node-input-period'
+            ];
+            function hideFields(allFields) {
+                allFields.forEach(function(sel) {
+                    $(sel).closest('.form-row').hide();
+                });
+            }
+
+            function showFields(fields) {
+                fields.forEach(function(sel) {
+                    $(sel).closest('.form-row').show();
+                });
+            }
+            // Query type change logic
+            $('#node-input-queryType').on('change', function() {
+                var val = $(this).val();
+                hideFields(allFields);
+                if (val === 'site_info' || val === 'live_status') {
+                    showFields(['#node-input-site']);
+                } else if (val === 'energy_history' || val === 'backup_history' ) {
+                    showFields([
+                        '#node-input-site', '#node-input-start_date','#node-input-end_date', '#node-input-timezone', '#node-input-period'
+                    ]);
+                } else if (val === 'charge_history') {
+                    showFields([
+                        '#node-input-site', '#node-input-start_date','#node-input-end_date', '#node-input-timezone'
+                    ]);
+                }
+            });
+            // Initial state
+            $('#node-input-queryType').trigger('change');
+
+        },
+        oneditsave: function() {
+            var queryType = $("#node-input-queryType").val();
+            var name = $("#node-input-name").val();
+            if (!name) {
+                $("#node-input-name").val(queryType);
+            }
+
+        }
+    });
+</script>
+
+<script type="text/html" data-template-name="tessie-energy-query">
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-input-name" placeholder="Name">
+    </div>
+    <div class="form-row">
+        <label for="node-input-server"><i class="fa fa-tag"></i> Server</label>
+        <input type="text" id="node-input-server" placeholder="Server">
+    </div>
+    <div class="form-row">
+        <label for="node-input-queryType"><i class="fa fa-list"></i> Query Type</label>
+        <select id="node-input-queryType">
+            <option value="" disabled selected>Select query type...</option>
+            <option value="backup_history">Backup History</option>
+            <option value="charge_history">Charge History</option>
+            <option value="energy_history">Energy History</option>
+            <option value="live_status">Live Status</option>
+            <option value="products">Products</option>
+            <option value="site_info">Site Info</option>
+        </select>    
+    <div class="form-row">
+        <label for="node-input-site"><i class="fa fa-battery"></i> Site</label>
+        <input type="text" id="node-input-site" placeholder="Site" style="width:70%">
+    </div>
+    </div>
+    <div class="form-row">
+        <label for="node-input-start_date"><i class="fa fa-calendar"></i> Start Date</label>
+        <input type="text" id="node-input-start_date" style="width:50%" placeholder="RFC3339 format">
+    </div>
+        <div class="form-row">
+        <label for="node-input-end_date"><i class="fa fa-calendar"></i> End Date</label>
+        <input type="text" id="node-input-end_date" style="width:50%" placeholder="RFC3339 format">
+    </div>
+    <div class="form-row">
+        <label for="node-input-timezone"><i class="fa fa-tag"></i> Time Zone for date/time pickers</label>
+        <select id="node-input-timezone">
+            <option value="UTC" selected>UTC</option>
+            <option value="local">Local</option>
+        </select>
+    </div>
+    <div class="form-row">
+        <label for="node-input-period"><i class="fa fa-calendar"></i> Kind</label>
+        <select id="node-input-period">
+            <option value="day" selected>Day</option>
+            <option value="week">Week</option>
+            <option value="month">Month</option>
+            <option value="year">Year</option>
+            <option value="lifetime">Lifetime</option>
+        </select>
+</script>
+
+<script type="text/html" data-help-name="tessie-energy-query">
+    <!-- ...existing code... -->
+    <p>Query Tessie API for energy site data.</p>
+    <p><b>All values can be overriden via inbound message:</b></p>
+    <p>See https://developer.tesla.com/docs/fleet-api/endpoints/energy for the full description of all queries.</p>
+     <p>Message overrides:</p>
+    <ul>
+        <li>msg.start_date</li>
+        <li>msg.end_date</li>
+        <li>msg.timezone</li>
+        <li>msg.kind</li>
+        <li>msg.period</li>
+    </ul>
+    <p>If a property is present in the inbound message, it will override the node editor value for that query.</p>
+</script>

@@ -1,0 +1,497 @@
+<script type="text/javascript">
+    RED.nodes.registerType('tessie-query',{
+        category: 'tessie',
+        color: '#E7E7AE',
+        defaults: {
+            name: {value:""},
+            server: {value:"", type:"tessie-server"},
+            vehicle: {value:"", type:"tessie-vehicle"},
+            queryType: {value:"", required:true},
+            only_active: {value:false, required:true},
+            use_cache: {value:true, required:true},
+            interval: {value:60, required:true,validate:RED.validators.number()},
+            condense: {value:false,required:true},
+            timezone: {value:"UTC",required:true},
+            distance_format: {value:"mi",required:true},
+            temperature_format: {value:"c",required:true},
+            format: {value:"json",required:true},
+            from: {value:""},
+            width: {value:300, required:false},
+            height: {value:300, required:false},
+            zoom: {value:13, required:false},
+            marker_size: {value:75, required:false},
+            style: {value:"light", required:false},
+            origin_latitude: {value:"", required:false},
+            origin_longitude: {value:"", required:false},
+            origin_radius: {value:"", required:false},
+            exclude_origin: {value:"false", required:false},
+            destination_latitude: {value:"", required:false},
+            destination_longitude: {value:"", required:false},
+            destination_radius: {value:"", required:false},
+            exclude_destination: {value:"false", required:false},
+            tag: {value:"", required:false},
+            to: {value:""},
+            exclude_tag: {value:"false", required:false},
+            driver_profile: {value:"", required:false},
+            exclude_driver_profile: {value:"false", required:false},
+            minimum_distance: {value:"", required:false},
+            limit: {value:"", required:false},
+            separate: {value:"false", required:false},
+            simplify: {value:"true", required:false},
+            details: {value:"false", required:false},
+            pressure_format: {value:"bar", required:false},
+            minimum_energy_added: {value:"", required:false},
+            superchargers_only: {value:false, required:false}
+        },
+        inputs: 1,
+        outputs: 1,
+        icon: "font-awesome/fa-car",
+        label: function() {
+            return this.name||"tessie query";
+        },
+        paletteLabel: 'tessie query',
+
+        oneditprepare: function() {
+            // Setup typedInput for all new number fields (fractional allowed)
+            var numberFields = [
+                "#node-input-width", "#node-input-height", "#node-input-zoom", "#node-input-marker_size",
+                "#node-input-origin_latitude", "#node-input-origin_longitude", "#node-input-origin_radius",
+                "#node-input-destination_latitude", "#node-input-destination_longitude", "#node-input-destination_radius",
+                "#node-input-minimum_distance", "#node-input-limit", "#node-input-minimum_energy_added"
+            ];
+            numberFields.forEach(function(sel) {
+                $(sel).typedInput({type:'num',types:['num']});
+            });
+            var boolFields = [
+                "#node-input-only_active", "#node-input-use_cache", "#node-input-condense", "#node-input-exclude_origin",
+                "#node-input-exclude_destination", "#node-input-exclude_tag", "#node-input-exclude_driver_profile",
+                "#node-input-separate", "#node-input-simplify", "#node-input-details", "#node-input-superchargers_only"
+            ];
+            boolFields.forEach(function(sel) {
+                $(sel).typedInput({type:'bool',types:['bool']});
+            });
+
+                function setupTimeField(fieldId) {
+                    var $input = $("#"+fieldId);
+                    var $container = $input.parent();
+                    var $dateInput = $('<input type="date" id="'+fieldId+'-date" style="width:30%; margin-left:110px; margin-right:20px" placeholder="YYYY-MM-DD">');
+                    var $timeInput = $('<input type="time" id="'+fieldId+'-time" style="width:20%" placeholder="HH:MM">');
+                    $dateInput.hide();
+                    $timeInput.hide();
+                    $container.append($dateInput).append($timeInput);
+                    $input.typedInput({
+                        default: 'str',
+                        types:[
+                            'str'
+                        ]
+                    });
+                    function updateTimestamp() {
+                        var date = $dateInput.val();
+                        var time = $timeInput.val();
+                        if (date || time) {
+                            if (!date) {
+                                var now = new Date();
+                                date = now.toISOString().slice(0,10);
+                            }
+                            if (!time) time = "00:00";
+                            var dt = new Date(date + "T" + time);
+                            var ts = Math.floor(dt.getTime() / 1000);
+                            $input.val(ts);
+                            $input.typedInput("value", ts);
+                        }
+                    }
+                    $dateInput.on("change", function() {
+                        if ($input.typedInput("type") === "str") updateTimestamp();
+                    });
+                    $timeInput.on("change", function() {
+                        if ($input.typedInput("type") === "str") updateTimestamp();
+                    });
+                    $input.on("typedinputtypechange", function(e, type) {
+                        if (type === "str") {
+                            $dateInput.show();
+                            $timeInput.show();
+                            updateTimestamp();
+                        } else {
+                            $dateInput.hide();
+                            $timeInput.hide();
+                        }
+                    });
+                    if ($input.typedInput("type") === "str") {
+                        $dateInput.show();
+                        $timeInput.show();
+                    }
+                }
+                // Setup each field independently
+                setupTimeField("node-input-from");
+                setupTimeField("node-input-to");
+            $("#node-input-distance_format").typedInput({type:"format", types:[{
+                value: "format",
+                options: [
+                    { value: "mi", label: "mi"},
+                    { value: "km", label: "km"},
+                ]
+            }]});
+            $("#node-input-temperature_format").typedInput({type:"tformat", types:[{
+                value: "tformat",
+                options: [
+                    { value: "f", label: "f"},
+                    { value: "c", label: "c"},
+                ]
+            }]});
+            $("#node-input-format").typedInput({type:"dformat", types:[{
+                value: "dformat",
+                options: [
+                    { value: "json", label: "json"},
+                    { value: "csv", label: "csv"},
+                ]
+            }]});
+
+            // Hide all fields except server, vehicle, queryType, until a query type is selected
+            var allFields = [
+                '#node-input-interval', '#node-input-condense', '#node-input-distance_format',
+                '#node-input-timezone', '#node-input-temperature_format', '#node-input-format',
+                '#node-input-from', '#node-input-to',
+                '#node-input-only_active', '#node-input-use_cache',
+                '#node-input-width', '#node-input-height', '#node-input-zoom', '#node-input-marker_size', '#node-input-style',
+                '#node-input-origin_latitude', '#node-input-origin_longitude', '#node-input-origin_radius', '#node-input-exclude_origin',
+                '#node-input-destination_latitude', '#node-input-destination_longitude', '#node-input-destination_radius', '#node-input-exclude_destination',
+                '#node-input-tag', '#node-input-exclude_tag', '#node-input-driver_profile', '#node-input-exclude_driver_profile',
+                '#node-input-minimum_distance', '#node-input-limit',
+                '#node-input-separate', '#node-input-simplify', '#node-input-details', '#node-input-invoice_vin',
+                '#node-input-pressure_format',
+                '#node-input-superchargers_only', '#node-input-minimum_energy_added'
+            ];
+            function hideFields(allFields) {
+                allFields.forEach(function(sel) {
+                    $(sel).closest('.form-row').hide();
+                });
+            }
+
+            function showFields(fields) {
+                fields.forEach(function(sel) {
+                    $(sel).closest('.form-row').show();
+                });
+            }
+            // Query type change logic
+            $('#node-input-queryType').on('change', function() {
+                var val = $(this).val();
+                hideFields(allFields);
+                if (val === 'state') {
+                    showFields(['#node-input-use_cache']);
+                } else if (val === 'vehicles') {
+                    showFields(['#node-input-only_active']);
+                } else if (val === 'states') {
+                    showFields([
+                        '#node-input-from', '#node-input-to','#node-input-interval', '#node-input-condense', '#node-input-timezone',
+                        '#node-input-distance_format', '#node-input-temperature_format', '#node-input-format'
+                    ]);
+                } else if (val === 'charges') {
+                    showFields([
+                        '#node-input-distance_format', '#node-input-format', '#node-input-superchargers_only', 
+                        '#node-input-origin_latitude', '#ode-input-origin_longitude', '#node-input-origin-radius', '#node-input-exclude_origin',
+                        '#node-input-timezone', '#node-input-from', '#node-input-to', '#node-input-minimum_energy_added', '#node-input-limit'
+                    ]);
+                
+                } else if (val === 'battery_health') {
+                    showFields([
+                        '#node-input-from', '#node-input-to', '#node-input-distance_format', '#node-input-only_active'
+                    ]);
+                } else if (val === 'battery_health_measurements') {
+                    showFields([
+                        '#node-input-from', '#node-input-to', '#node-input-distance_format'
+                    ]);
+                } else if (val === 'map') {
+                    showFields([
+                        '#node-input-width', '#node-input-height', '#node-input-zoom', '#node-input-marker_size', '#node-input-style'
+                    ]);
+                } else if (val === 'drives') {
+                    showFields([
+                        '#node-input-distance_format', '#node-input-temperature_format', '#node-input-from', '#node-input-to', '#node-input-timezone', 
+                        '#node-input-origin_latitude', '#node-input-origin_longitude', '#node-input-origin_radius', '#node-input-exclude_origin', 
+                        '#node-input-destination_latitude', '#node-input-destination_longitude', '#node-input-destination_radius', '#node-input-exclude_destination',
+                        '#node-input-tag', '#node-input-exclude_tag', '#node-input-driver_profile', '#node-input-exclude_driver_profile', 
+                        '#node-input-format','#node-input-minimum_distance', '#node-input-limit'
+                    ]);
+                } else if (val === 'path') {
+                    showFields( [
+                        '#node-input-from', '#node-input-to', '#node-input-separate', '#node-input-simplify', '#node-input-details'
+                    ]);
+                } else if (val === 'charging_invoices') {
+                    showFields([
+                        '#node-input-timezone', '#node-input-from', '#node-input-to', '#node-input-format', '#node-input-invoice_vin'
+                    ]);
+                } else if (val === 'idles') {
+                    showFields([
+                        '#node-input-distance_format', '#node-input-format', '#node-input-timezone', '#node-input-from', '#node-input-to', 
+                        '#node-input-origin_latitude', '#node-input-origin_longitude', '#node-input-origin_radius', '#node-input-exclude_origin', 
+                        '#node-input-limit'
+                    ]);
+                } else if (val === 'tire_pressure') {
+                    showFields([
+                        '#node-input-pressure_format', '#node-input-from', '#node-input-to'
+                    ]);
+                }
+            });
+            // Initial state
+            $('#node-input-queryType').trigger('change');
+
+        },
+        oneditsave: function() {
+            var queryType = $("#node-input-queryType").val();
+            var name = $("#node-input-name").val();
+            if (!name) {
+                $("#node-input-name").val(queryType);
+            }
+        }
+    });
+</script>
+
+<script type="text/html" data-template-name="tessie-query">
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-input-name" placeholder="Name">
+    </div>
+    <div class="form-row">
+        <label for="node-input-server"><i class="fa fa-tag"></i> Server</label>
+        <input type="text" id="node-input-server" placeholder="Server">
+    </div>
+    <div class="form-row">
+        <label for="node-input-vehicle"><i class="fa fa-car"></i> Vehicle</label>
+        <input type="text" id="node-input-vehicle" placeholder="Vehicle" style="width:70%">
+    </div>
+    <div class="form-row">
+        <label for="node-input-queryType"><i class="fa fa-list"></i> Query Type</label>
+        <select id="node-input-queryType">
+            <option value="" disabled selected>Select query type...</option>
+            <option value="" disabled>--Vehicle Data--</option>
+            <option value="state">Get Vehicle</option>
+            <option value="vehicles">Get Vehicles</option>
+            <option value="states">Get Historical States</option>
+            <option value="battery">Get Battery</option>
+            <option value="battery_health">Get Battery Health</option>
+            <option value="battery_health_measurements">Get Battery Health Measurements</option>
+            <option value="location">Get Location</option>
+            <option value="firmware_alerts">Get Firmware Alerts</option>
+            <option value="map">Get Map</option>
+            <option value="consumption_since_charge">Get Consumption</option>
+            <option value="weather">Get Weather</option>
+            <option value="drives">Get Drives</option>
+            <option value="path">Get Driving Path</option>
+            <option value="charges">Get Charges</option>
+            <option value="charging_invoices">Get All Charging Invoices (Fleet accounts only)</option>
+            <option value="idles">Get Idles</option>
+            <option value="last_idle_state">Get Last Idle State</option>
+            <option value="tire_pressure">Get Tire Pressure</option>
+            <option value="status">Get Status</option>
+            <option value="license_plate">Get License Plate</option>
+            <option value="" disabled>--Driver Management--</option>
+            <option value="drivers">Get Drivers</option>
+            <option value="invitations">Get Invitations</option>
+        </select>
+    </div>
+    <div class="form-row">
+        <label for="node-input-only_active"><i class="fa fa-toggle-on"></i> Only Active</label>
+        <input type="text" id="node-input-only_active" style="width:30%" placeholder="">
+    </div>
+    <div class="form-row">
+        <label for="node-input-interval"><i class="fa fa-tag"></i> Interval</label>
+        <input type="text" id="node-input-interval" placeholder="">
+    </div>
+    <div class="form-row">
+        <label for="node-input-condense"><i class="fa fa-tag"></i> Condense</label>
+        <input type="text" id="node-input-condense" style="width:30%" placeholder="">
+    </div>
+    <div class="form-row">
+        <label for="node-input-superchargers_only"><i class="fa fa-bolt"></i> Superchargers Only</label>
+        <input type="text" id="node-input-superchargers_only" style="width:30%" placeholder="">
+    </div>
+    <div class="form-row">
+        <label for="node-input-minimum_energy_added"><i class="fa fa-battery"></i> Minimum Energy Added</label>
+        <input type="number" id="node-input-minimum_energy_added" style="width:30%" placeholder="kWh">
+    </div>
+    <div class="form-row">
+        <label for="node-input-distance_format"><i class="fa fa-tag"></i> Distance Format</label>
+        <input type="text" id="node-input-distance_format" style="width: 30%" placeholder="">
+    </div>
+    <div class="form-row">
+        <label for="node-input-timezone"><i class="fa fa-tag"></i> Time Zone</label>
+        <select id="node-input-timezone">
+            <option value="UTC" selected>UTC</option>
+            <option value="America/New_York">America/New_York</option>
+            <option value="America/Chicago">America/Chicago</option>
+            <option value="America/Denver">America/Denver</option>
+            <option value="America/Los_Angeles">America/Los_Angeles</option>
+            <option value="Europe/London">Europe/London</option>
+            <option value="Europe/Paris">Europe/Paris</option>
+            <option value="Asia/Tokyo">Asia/Tokyo</option>
+            <option value="Australia/Sydney">Australia/Sydney</option>
+        </select>
+    </div>
+    <div class="form-row">
+        <label for="node-input-temperature_format"><i class="fa fa-tag"></i> Temperature Format</label>
+        <input type="text" id="node-input-temperature_format" style="width: 30%" placeholder="">
+    </div>
+    <div class="form-row">
+        <label for="node-input-format"><i class="fa fa-tag"></i> Response Format</label>
+        <input type="text" id="node-input-format" style="width: 30%" placeholder="">
+    </div>
+    <div class="form-row">
+    <label for="node-input-from"><i class="fa fa-tag"></i> From</label>
+    <input type="number" id="node-input-from"  style="width:70%">
+    </div>
+    <div class="form-row">
+    <label for="node-input-to"><i class="fa fa-tag"></i> To</label>
+    <input type="number" id="node-input-to"  style="width:70%" >
+    </div>
+    <div class="form-row">
+        <label for="node-input-use_cache"><i class="fa fa-toggle-on"></i> Use Cache</label>
+        <input type ="text" id="node-input-use_cache" style="width:30%" placeholder="">
+    </div>
+    <div class="form-row">
+        <label for="node-input-width"><i class="fa fa-arrows-h"></i> Width</label>
+        <input type="number" id="node-input-width" value="300" placeholder="">
+    </div>
+    <div class="form-row">
+        <label for="node-input-height"><i class="fa fa-arrows-v"></i> Height</label>
+        <input type="number" id="node-input-height" value="300" placeholder="">
+    </div>
+    <div class="form-row">
+        <label for="node-input-zoom"><i class="fa fa-search-plus"></i> Zoom</label>
+        <input type="number" id="node-input-zoom" value="13" placeholder="">
+    </div>
+    <div class="form-row">
+        <label for="node-input-marker_size"><i class="fa fa-map-marker"></i> Marker Size</label>
+        <input type="number" id="node-input-marker_size" value="75" placeholder="">
+    </div>
+    <div class="form-row">
+        <label for="node-input-style"><i class="fa fa-paint-brush"></i> Style</label>
+        <select id="node-input-style">
+            <option value="light" selected>Light</option>
+            <option value="dark">Dark</option>
+        </select>
+    </div>
+    <div class="form-row">
+        <label for="node-input-origin_latitude"><i class="fa fa-map-marker"></i> Origin Latitude</label>
+        <input type="number" id="node-input-origin_latitude" style="width: 50%" placeholder="">
+    </div>
+    <div class="form-row">
+        <label for="node-input-origin_longitude"><i class="fa fa-map-marker"></i> Origin Longitude</label>
+        <input type="number" id="node-input-origin_longitude" style="width: 50%" placeholder="">
+    </div>
+    <div class="form-row">
+        <label for="node-input-origin_radius"><i class="fa fa-circle"></i> Origin Radius</label>
+        <input type="number" id="node-input-origin_radius" style="width: 30%" placeholder="(meters)">
+    </div>
+    <div class="form-row">
+        <label for="node-input-exclude_origin"><i class="fa fa-ban"></i> Exclude Origin</label>
+        <input type="text" id="node-input-exclude_origin" style="width:30%" placeholder="">
+    </div>
+    <div class="form-row">
+        <label for="node-input-destination_latitude"><i class="fa fa-map-marker"></i> Destination Latitude</label>
+        <input type="number" id="node-input-destination_latitude" style="width: 50%" placeholder="">
+    </div>
+    <div class="form-row">
+        <label for="node-input-destination_longitude"><i class="fa fa-map-marker"></i> Destination Longitude</label>
+        <input type="number" id="node-input-destination_longitude" style="width: 50%" placeholder="">
+    </div>
+    <div class="form-row">
+        <label for="node-input-destination_radius"><i class="fa fa-circle"></i> Destination Radius</label>
+        <input type="number" id="node-input-destination_radius" style="width: 30%" placeholder="(meters)">
+    </div>
+    <div class="form-row">
+        <label for="node-input-exclude_destination"><i class="fa fa-ban"></i> Exclude Destination</label>
+        <input type="text" id="node-input-exclude_destination" style="width:30%" placeholder="">
+    </div>
+    <div class="form-row">
+        <label for="node-input-tag"><i class="fa fa-tag"></i> Tag</label>
+        <input type="text" id="node-input-tag" placeholder="Tag">
+    </div>
+    <div class="form-row">
+        <label for="node-input-exclude_tag"><i class="fa fa-ban"></i> Exclude Tag</label>
+        <input type="text" id="node-input-exclude_tag" style="width:30%" placeholder="">
+    </div>
+    <div class="form-row">
+        <label for="node-input-driver_profile"><i class="fa fa-user"></i> Driver Profile</label>
+        <input type="text" id="node-input-driver_profile" placeholder="">
+    </div>
+    <div class="form-row">
+        <label for="node-input-exclude_driver_profile"><i class="fa fa-ban"></i> Exclude Driver Profile</label>
+        <input type="text" id="node-input-exclude_driver_profile" style="width:30%" placeholder="">
+    </div>
+    <div class="form-row">
+        <label for="node-input-minimum_distance"><i class="fa fa-road"></i> Minimum Distance</label>
+        <input type="number" id="node-input-minimum_distance" style="width: 30%" placeholder="(miles)">
+    </div>
+    <div class="form-row">
+        <label for="node-input-limit"><i class="fa fa-list-ol"></i> Limit</label>
+        <input type="number" id="node-input-limit" style="width: 30%" placeholder="Max results">
+    </div>
+    <div class="form-row">
+        <label for="node-input-separate"><i class="fa fa-random"></i> Separate</label>
+        <input type="text" id="node-input-separate" style="width:30%" placeholder="">
+    </div>
+    <div class="form-row">
+        <label for="node-input-simplify"><i class="fa fa-compress"></i> Simplify</label>
+        <input type="text" id="node-input-simplify" style="width:30%" placeholder="">
+    </div>
+    <div class="form-row">
+        <label for="node-input-details"><i class="fa fa-info-circle"></i> Details</label>
+        <input type="text" id="node-input-details" style="width:30%" placeholder="">
+    </div>
+    <div class="form-row">
+    </div>
+    <div class="form-row">
+        <label for="node-input-pressure_format"><i class="fa fa-tachometer"></i> Pressure Format</label>
+        <select id="node-input-pressure_format">
+            <option value="bar" selected>Bar</option>
+            <option value="kpa">Kpa</option>
+            <option value="psi">Psi</option>
+        </select>
+    </div>
+</script>
+
+<script type="text/html" data-help-name="tessie-query">
+    <!-- ...existing code... -->
+    <p>Query Tessie API for charges, states, and more.</p>
+    <p><b>All values can be overriden via inbound message:</b></p>
+    <p>See https://developer.tessie.com/reference/ for the full description of all queries.</p>
+     <p>Listed alphabetically:</p>
+    <ul>
+        <li>msg.condense</li>
+        <li>msg.destination_latitude</li>
+        <li>msg.destination_longitude</li>
+        <li>msg.destination_radius (meters)</li>
+        <li>msg.details</li>
+        <li>msg.distance_format</li>
+        <li>msg.driver_profile</li>
+        <li>msg.exclude_destination</li>
+        <li>msg.exclude_driver_profile</li>
+        <li>msg.exclude_origin</li>
+        <li>msg.exclude_tag</li>
+        <li>msg.format</li>
+        <li>msg.from (Unix timestamp in seconds)</li>
+        <li>msg.height (map height)</li>
+        <li>msg.interval (seconds between data points.  1 = all data points)</li>
+        <li>msg.limit (number of results)</li>
+        <li>msg.marker_size (map marker)</li>
+        <li>msg.minimum_distance (miles)</li>
+        <li>msg.minimum_energy_added (kWh)</li>
+        <li>msg.only_active</li>
+        <li>msg.origin_latitude</li>
+        <li>msg.origin_longitude</li>
+        <li>msg.origin_radius (meters)</li>
+        <li>msg.pressure_format</li>
+        <li>msg.separate (driving path)</li>
+        <li>msg.simplify (driving path)</li>
+        <li>msg.style (map style)</li>
+        <li>msg.superchargers_only (true/false)</li>
+        <li>msg.tag</li>
+        <li>msg.temperature_format</li>
+        <li>msg.timezone</li>
+        <li>msg.to (Unix timestamp in seconds)</li>
+        <li>msg.use_cache</li>
+        <li>msg.width (map width)</li>
+        <li>msg.zoom (map zoom)</li>
+    </ul>
+    <p>If a property is present in the inbound message, it will override the node editor value for that query.</p>
+</script>

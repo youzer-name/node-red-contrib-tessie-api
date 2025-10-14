@@ -1,0 +1,31 @@
+<script type="text/javascript">
+    RED.nodes.registerType('tessie-server',{
+        category: 'config',
+        defaults: {
+            baseUrl: {value:"https://api.tessie.com",required:true},
+            tessieservername: {value:"Tessie Server",required:true},
+            token: {value:""},
+            },
+        label: function() {
+            return this.tessieservername;
+        }
+    });
+</script>
+
+<script type="text/html" data-template-name="tessie-server">
+    <div class="form-row">
+        <label for="node-config-input-tessie-server-name"><i class="fa fa-bookmark"></i> Name</label>
+        <input type="text" id="node-config-input-tessieservername">
+    </div>
+    <div class="form-row">
+        <label for="node-config-input-baseUrl"><i class="fa fa-link"></i> Base URL</label>
+    <input type="text" id="node-config-input-baseUrl" placeholder="https://api.tessie.com">
+    </div>
+    <div class="form-row">
+        <label for="node-config-input-token"><i class="fa fa-key"></i> Token</label>
+        <input type="text" id="node-config-input-token">
+    </div>
+
+</script>
+
+

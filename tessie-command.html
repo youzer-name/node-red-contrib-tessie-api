@@ -1,0 +1,485 @@
+<script type="text/javascript">
+    RED.nodes.registerType('tessie-command',{
+        category: 'tessie',
+        color: '#E7E7AE',
+        defaults: {
+            name: {value:""},
+            server: {value:"", type:"tessie-server"},
+            vehicle: {value:"", type:"tessie-vehicle"},
+            command: {value:"", required:true},
+            drives: {value:"", required:false},
+            wait_for_completion: {value:true, required:false},
+            charge_id: {value:"", required:false},
+            cost: {value:"", required:false},
+            tag: {value:"", required:false},
+            plate: {value:"", required:false},
+            temperature: {value:"", required:false},
+            seat: {value:"", required:false},
+            level: {value:"3", required:false},
+            on: {value:false, required:false},
+            fan_only: {value:false, required:false},
+            cop_temp: {value:"", required:false},
+            mode: {value:"", required:false},
+            percent: {value:"", required:false},
+            amps: {value:"", required:false},
+            in_seconds: {value:"", required:false},
+            days_of_week: {value:"", required:false},
+            enabled: {value:true, required:false},
+            start_enabled: {value:false, required:false},
+            end_enabled: {value:false, required:false},
+            one_time: {value:false, required:false},
+            id: {value:"", required:false},
+            start_time: {value:"", required:false},
+            end_time: {value:"", required:false},
+            lat: {value:"", required:false},
+            lon: {value:"", required:false},
+            precondition_time: {value:"", required:false},
+            value: {value:"", required:false},
+            locale: {value:"en-US", required:false},
+            mph: {value:"", required:false},
+            pin: {value:"", required:false},
+            user_id: {value:"", required:false}
+        },
+            
+        inputs: 1,
+        outputs: 1,
+        icon: "font-awesome/fa-car",
+        align: "right",
+        label: function() {
+            return this.name||"tessie command";
+        },
+        paletteLabel: 'tessie command',
+
+            oneditprepare: function() {
+
+            // Setup typedInput for all new number fields (fractional allowed)
+            var numberFields = [
+                "#node-input-cost", "#node-input-temperature", "#node-input-level", "#node-input-cop_temp",
+                "#node-input-percent", "#node-input-amps", "#node-input-in_seconds", "#node-input-id_string", "#node-input-id_int",
+                "#node-input-start_time", "#node-input-end_time", "#node-input-lat", "#node-input-lon",
+                "#node-input-precondition_time", "#node-input-value", "#node-input-mph", "#node-input-user_id"
+            ];
+            numberFields.forEach(function(sel) {
+                $(sel).typedInput({type:'num',types:['num']});
+            });
+            var booleanFields = [
+                "#node-input-wait_for_completion", "#node-input-on", "#node-input-fan_only",
+                "#node-input-enabled", "#node-input-start_enabled", "#node-input-end_enabled",
+                "#node-input-one_time"
+            ];
+            booleanFields.forEach(function(sel) {
+                $(sel).typedInput({type:'bool',types:['bool']});
+            });
+            
+            function updateFieldVisibility() {
+                var cmd = $("#node-input-command").val();
+                //hide all optional fields initially
+                //commands with no additional fields: wake
+                $("#node-input-drives").closest('.form-row').hide();
+                $("#node-input-wait_for_completion").closest('.form-row').hide();
+                $("#node-input-charge_id").closest('.form-row').hide();
+                $("#node-input-cost").closest('.form-row').hide();
+                $("#node-input-tag").closest('.form-row').hide();
+                $("#node-input-plate").closest('.form-row').hide();
+                $("#node-input-temperature").closest('.form-row').hide();
+                $("#node-input-seat").closest('.form-row').hide();
+                $("#node-input-level").closest('.form-row').hide();
+                $("#node-input-on").closest('.form-row').hide();
+                $("#node-input-fan_only").closest('.form-row').hide();
+                $("#node-input-cop_temp").closest('.form-row').hide();
+                $("#node-input-mode").closest('.form-row').hide();
+                $("#node-input-percent").closest('.form-row').hide();
+                $("#node-input-amps").closest('.form-row').hide();
+                $("#node-input-in_seconds").closest('.form-row').hide();
+                $("#node-input-days_of_week").closest('.form-row').hide();
+                $("#node-input-enabled").closest('.form-row').hide();
+                $("#node-input-start_enabled").closest('.form-row').hide();
+                $("#node-input-end_enabled").closest('.form-row').hide();
+                $("#node-input-one_time").closest('.form-row').hide();
+                $("#node-input-id").closest('.form-row').hide();
+                $("#node-input-start_time").closest('.form-row').hide();
+                $("#node-input-end_time").closest('.form-row').hide();
+                $("#node-input-lat").closest('.form-row').hide();
+                $("#node-input-lon").closest('.form-row').hide();
+                $("#node-input-precondition_time").closest('.form-row').hide();
+                $("#node-input-value").closest('.form-row').hide();
+                $("#node-input-locale").closest('.form-row').hide();
+                $("#node-input-mph").closest('.form-row').hide();
+                $("#node-input-pin").closest('.form-row').hide();
+                $("#node-input-user_id").closest('.form-row').hide();
+
+                
+                //show fields as needed based on command
+                if (cmd === "set_tag") {
+                    $("#node-input-drives").closest('.form-row').show();
+                    $("#node-input-tag").closest('.form-row').show();
+                } else if (cmd === "set_cost") {
+                    $("#node-input-charge_id").closest('.form-row').show();
+                    $("#node-input-cost").closest('.form-row').show();
+                } else if (cmd === "plate") {
+                    $("#node-input-plate").closest('.form-row').show();
+                } else if (cmd === "set_temperatures") {
+                    $("#node-input-wait_for_completion").closest('.form-row').show();
+                    $("#node-input-temperature").closest('.form-row').show();
+                } else if (cmd === "set_seat_heat" || cmd === "set_seat_cool") {
+                    $("#node-input-wait_for_completion").closest('.form-row').show();
+                    $("#node-input-seat").closest('.form-row').show();
+                    $("#node-input-level").closest('.form-row').show();
+                } else if (cmd === "set_cabin_overheat_protection" || cmd === "set_bioweapon_mode" || cmd === "set_climate_keeper_mode") {
+                    $("#node-input-wait_for_completion").closest('.form-row').show();
+                    $("#node-input-on").closest('.form-row').show();
+                    $("#node-input-fan_only").closest('.form-row').show();
+                } else if (cmd === "set_cop_temp") {
+                    $("#node-input-wait_for_completion").closest('.form-row').show();
+                    $("#node-input-cop_temp").closest('.form-row').show();
+                } else if (cmd === "set_bioweapon_mode") {
+                    $("#node-input-wait_for_completion").closest('.form-row').show();
+                    $("#node-input-on").closest('.form-row').show();
+                } else if (cmd === "set_climate_keeper_mode") {
+                    $("#node-input-wait_for_completion").closest('.form-row').show();
+                    $("#node-input-mode").closest('.form-row').show();
+                } else if (cmd === "set_charge_limit") {
+                    $("#node-input-wait_for_completion").closest('.form-row').show();
+                    $("#node-input-percent").closest('.form-row').show();
+                } else if (cmd === "set_charging_amps") {
+                    $("#node-input-wait_for_completion").closest('.form-row').show();
+                    $("#node-input-amps").closest('.form-row').show();
+                } else if (cmd === "schedule_software_update") {
+                    $("#node-input-wait_for_completion").closest('.form-row').show();
+                    $("#node-input-in_seconds").closest('.form-row').show();
+                } else if (cmd==="add_charge_schedule")  {
+                    $("#node-input-wait_for_completion").closest('.form-row').show();
+                    $("#node-input-days_of_week").closest('.form-row').show();
+                    $("#node-input-enabled").closest('.form-row').show();
+                    $("#node-input-start_enabled").closest('.form-row').show();
+                    $("#node-input-end_enabled").closest('.form-row').show();
+                    $("#node-input-one_time").closest('.form-row').show();
+                    $("#node-input-id").closest('.form-row').show();
+                    $("#node-input-start_time").closest('.form-row').show();
+                    $("#node-input-end_time").closest('.form-row').show();
+                    $("#node-input-lat").closest('.form-row').show();
+                    $("#node-input-lon").closest('.form-row').show();
+                } else if (cmd==="add_precondition_schedule")  {
+                    $("#node-input-wait_for_completion").closest('.form-row').show();
+                    $("#node-input-days_of_week").closest('.form-row').show();
+                    $("#node-input-enabled").closest('.form-row').show();
+                    $("#node-input-one_time").closest('.form-row').show();
+                    $("#node-input-id").closest('.form-row').show();
+                    $("#node-input-precondition_time").closest('.form-row').show();
+                    $("#node-input-lat").closest('.form-row').show();
+                    $("#node-input-lon").closest('.form-row').show();
+                } else if (cmd==="remove_charge_schedule" || cmd==="remove_precondition_schedule") {
+                    $("#node-input-wait_for_completion").closest('.form-row').show();
+                    $("#node-input-id").closest('.form-row').show();
+                } else if (cmd ==="share") {
+                    $("#node-input-wait_for_completion").closest('.form-row').show();
+                    $("#node-input-value").closest('.form-row').show();
+                    $("#node-input-locale").closest('.form-row').show();
+                } else if (cmd==="set_speed_limit") {
+                    $("#node-input-wait_for_completion").closest('.form-row').show();
+                    $("#node-input-mph").closest('.form-row').show();
+                } else if (cmd==="enable_speed_limit" || cmd==="disable_speed_limit" || cmd==="clear_speed_limit_pin") {    
+                    $("#node-input-wait_for_completion").closest('.form-row').show();
+                    $("#node-input-pin").closest('.form-row').show();
+                } else if (cmd==="delete_driver" || cmd === "revoke") {
+                    $("#node-input-id").closest('.form-row').show();
+                    $("node-input-user_id").closest('.form-row').show();
+                } else if (cmd === "lock" || cmd === "unlock" || cmd === "activate_front_trunk" || cmd === "activate_rear_trunk" 
+                    || cmd === "open_tonneau" || cmd === "close_tonneau" || cmd === "vent_windows" || cmd === "close_windows" 
+                    || cmd === "start_climate" || cmd === "stop_climate" || cmd === "start_defrost" || cmd === "stop_defrost" 
+                    || cmd === "start_steering_wheel_heater" || cmd === "stop_steering_wheel_heater" || cmd === "start_charging"
+                    || cmd === "stop_charging" || cmd === "open_charge_port" || cmd === "close_charge_port" || cmd === "flash"
+                    || cmd === "honk" || cmd === "trigger_homelink" || cmd === "remote_start" || cmd === "vent_sunroof"
+                    || cmd === "close_sunroof" || cmd === "enable_sentry" || cmd === "disable_sentry" || cmd === "enable_valet"
+                    || cmd === "disable_valet" || cmd === "cancel_software_update" || cmd ==="remote_boombox" || cmd === "enable_guest"
+                    || cmd === "disable_guest") {
+                       
+                    $("#node-input-wait_for_completion").closest('.form-row').show();
+                } 
+            }
+            $("#node-input-command").on('change', updateFieldVisibility);
+            updateFieldVisibility();
+        }
+
+    });
+
+</script>
+
+<script type="text/html" data-template-name="tessie-command">
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-input-name" placeholder="Name">
+    </div>
+    <div class="form-row">
+        <label for="node-input-server"><i class="fa fa-tag"></i> Server</label>
+        <input type="text" id="node-input-server" placeholder="Server">
+    </div>
+    <div class="form-row">
+        <label for="node-input-vehicle"><i class="fa fa-car"></i> Vehicle</label>
+        <input type="text" id="node-input-vehicle" placeholder="Vehicle" style="width:70%">
+    </div>
+    <div class="form-row">
+        <label for="node-input-command"><i class="fa fa-bolt"></i> Command</label>
+        <select id="node-input-command">
+            <option value="" disabled selected>Select command...</option>
+            <option value="" disabled>--Vehicle Data--</option>
+            <option value="set_tag">Set Drive Tag</option>
+            <option value="set_cost">Set Charge Cost</option>
+            <option value="plate">Set License Plate</option>
+            <option value="" disabled >--Vehicle Commands--</option>
+            <option value="wake">Wake</option>
+            <option value="lock">Lock</option>
+            <option value="unlock">Unlock</option>
+            <option value="activate_front_trunk">Front Trunk</option>
+            <option value="activate_rear_trunk">Rear Trunk</option>
+            <option value="open_tonneau">Open Tonneau</option>
+            <option value="close_tonneau">Close Tonneau</option>
+            <option value="vent_windows">Vent Windows</option>
+            <option value="close_windows">Close Windows</option>
+            <option value="start_climate">Start Climate</option>
+            <option value="stop_climate">Stop Climate</option>
+            <option value="set_temperatures">Set Temperature</option>
+            <option value="set_seat_heat">Set Seat Heating</option>
+            <option value="set_seat_cool">Set Seat Cooling</option>
+            <option value="start_max_defrost">Start Defrost</option>
+            <option value="stop_max_defrost">Stop Defrost</option>
+            <option value="start_steering_wheel_heater">Start Steering Wheel Heater</option>
+            <option value="stop_steering_wheel_heater">Stop Steering Wheel Heater</option>
+            <option value="set_cabin_overheat_protection">Set Cabin Overheat Protection</option>
+            <option value="set_cop_temp">Set Cabin Overheat Protection Temp</option>
+            <option value="set_bioweapon_mode">Set Bio Defense Mode</option>
+            <option value="set_climate_keeper_mode">Set Climate Keeper Mode</option>
+            <option value="start_charging">Start Charging</option>
+            <option value="stop_charging">Stop Charging</option>
+            <option value="set_charge_limit">Set Charging Limit</option>
+            <option value="set_charging_amps">Set Charging Amps</option>
+            <option value="open_charge_port">Open Charge Port</option>
+            <option value="close_charge_port">Close Charge Port</option>
+            <option value="flash">Flash Lights</option>
+            <option value="honk">Honk</option>
+            <option value="trigger_homelink">Trigger Homelink</option>
+            <option value="remote_start">Enable Keyless Driving</option>
+            <option value="vent_sunroof">Vent Sunroof</option>
+            <option value="close_sunroof">Close Sunroof</option>
+            <option value="enable_sentry">Enable Sentry Mode</option>
+            <option value="disable_sentry">Disable Sentry Mode</option>
+            <option value="enable_valet">Enable Valet Mode</option>
+            <option value="disable_valet">Disable Valet Mode</option>
+            <option value="schedule_software_update">Schedule Software Update</option>
+            <option value="cancel_software_update">Cancel Software Update</option>
+            <option value="add_charge_schedule">Add Charge Schedule (v2024.26+)</option>
+            <option value="remove_charge_schedule">Remove Charge Schedule (v2024.26+)</option>
+            <option value="add_precondition_schedule">Add Precondition Schedule (v2024.26+)</option>
+            <option value="remove_precondition_schedule">Remove Precondition Schedule (v2024.26+)</option>
+            <option value="share">Share</option>
+            <option value="remote_boombox">Boombox</option>
+            <option value="set_speed_limit">Set Speed Limit</option>
+            <option value="enable_speed_limit">Enable Speed Limit</option>
+            <option value="disable_speed_limit">Disable Speed Limit</option>
+            <option value="clear_speed_limit_pin">Clear Speed Limit Pin</option>
+            <option value="" disabled>--Driver Management--</option>
+            <option value="delete">Delete Driver</option>
+            <option value="enable_guest">Enable Guest Mode</option>
+            <option value="disable_guest">Disable Guest Mode</option>
+            <option value="invitations">Create an Invitation</option>
+            <option value="revoke">Revoke an Invitation</option>
+        </select>
+    </div>
+    <div class="form-row">
+        <label for="node-input-wait_for_completion"><i class="fa fa-clock-o"></i> Wait For Completion</label>
+        <input type="text" id="node-input-wait_for_completion" style="width:30%">
+    </div>
+    <div class="form-row">
+        <label for="node-input-charge_id"><i class="fa fa-sliders"></i> Charge ID</label>
+        <input type="text" id="node-input-charge_id" placeholder="">
+    </div>
+    <div class="form-row">
+        <label for="node-input-drives"><i class="fa fa-sliders"></i> Drives (comma separated)</label>
+        <input type="text" id="node-input-drives" placeholder="">
+    </div>
+    <div class="form-row">
+        <label for="node-input-cost"><i class="fa fa-sliders"></i> Cost</label>
+        <input type="number" id="node-input-cost" placeholder="">
+    </div>
+    <div class="form-row">
+        <label for="node-input-tag"><i class="fa fa-sliders"></i> Tag</label>
+        <input type="text" id="node-input-tag" placeholder="">
+    </div>
+    <div class="form-row">
+        <label for="node-input-plate"><i class="fa fa-sliders"></i> License Plate</label>
+        <input type="text" id="node-input-plate" placeholder="">
+    </div>
+    <div class="form-row">
+        <label for="node-input-temperature"><i class="fa fa-sliders"></i> Temperature (15° - 28°C)</label>
+        <input type="number" id="node-input-temperature" placeholder="">
+    </div>
+    <div class="form-row">
+        <label for="node-input-seat"><i class="fa fa-sliders"></i> Seat</label>
+        <select id="node-input-seat">
+            <option value="all">All Seats</option>
+            <option value="front_left">Driver</option>
+            <option value="front_right">Passenger</option>
+            <option value="rear_left">Rear Left</option>
+            <option value="rear_center">Rear Right</option>
+            <option value="rear_right">Rear Center</option>
+            <option value="third_row_left">Rear Left 2</option>
+            <option value="third_row_right">Rear Right 2</option>
+        </select>
+    </div>
+    <div class="form-row">
+        <label for="node-input-level"><i class="fa fa-sliders"></i> Level</label>
+        <select id="node-input-level">
+            <option value="0">0 (Off)</option>
+            <option value="1">1 (Low)</option>
+            <option value="2">2 (Medium)</option>
+            <option value="3">3 (High)</option>
+        </select>
+    </div>  
+    <div class="form-row">
+        <label for="node-input-on"><i class="fa fa-sliders"></i> On/Off</label>
+        <input type="text" id="node-input-on">
+    </div>
+    <div class="form-row">
+        <label for="node-input-fan_only"><i class="fa fa-sliders"></i> Fan Only</label>
+        <input type="text" id="node-input-fan_only" style="width:30%">
+    </div>
+    <div class="form-row">
+        <label for="node-input-cop_temp"><i class="fa fa-sliders"></i> COP Temp</label>
+        <select id="node-input-cop_temp">
+            <option value="1">1 (Low)</option>
+            <option value="2">2 (Medium)</option>
+            <option value="3">3 (High)</option>
+        </select>
+    </div>
+    <div class="form-row">
+        <label for="node-input-mode"><i class="fa fa-sliders"></i> Mode</label>
+        <select id="node-input-mode">
+            <option value="0">0 (Disable)</option>
+            <option value="1">1 (Keep Mode)</option>
+            <option value="2">2 (Dog Mode)</option>
+            <option value="3">3 (Camp MOde)</option>
+        </select>
+    </div>
+    <div class="form-row">
+        <label for="node-input-percent"><i class="fa fa-sliders"></i> Percent</label>
+        <input type="number" id="node-input-percent" placeholder="">
+    </div>
+    <div class="form-row">
+        <label for="node-input-amps"><i class="fa fa-sliders"></i> Amps</label>
+        <input type="number" id="node-input-amps" placeholder="">
+    </div>
+    <div class="form-row">
+        <label for="node-input-in_seconds"><i class="fa fa-sliders"></i> In Seconds</label>
+        <input type="number" id="node-input-in_seconds" placeholder="0 for immediate">
+    </div>
+    <div class="form-row">
+        <label for="node-input-days_of_week"><i class="fa fa-sliders"></i> Days of Week (comma separated)</label>
+        <input type="text" id="node-input-days_of_week" placeholder="e.g. Thursday,Saturday - Also supports All and Weekdays">
+    </div>
+    <div class="form-row">
+        <label for="node-input-enabled"><i class="fa fa-sliders"></i> Enabled</label>
+        <input type="text" id="node-input-enabled" style="width:30%">
+    </div>
+    <div class="form-row">
+        <label for="node-input-start_enabled"><i class="fa fa-sliders"></i> Start Enabled</label>
+        <input type="text" id="node-input-start_enabled" style="width:30%">
+    </div>
+    <div class="form-row">
+        <label for="node-input-end_enabled"><i class="fa fa-sliders"></i> End Enabled</label>
+        <input type="text" id="node-input-end_enabled" style="width:30%">
+    </div>
+    <div class="form-row">
+        <label for="node-input-one_time"><i class="fa fa-sliders"></i> One-Time</label>
+        <input type="text" id="node-input-one_time" style="width:30%">
+    </div>
+    <div class="form-row">
+        <label for="node-input-id"><i class="fa fa-sliders"></i> Schedule ID</label>
+        <input type="text" id="node-input-id" placeholder="omit for new schedule">
+    </div>
+    <div class="form-row">
+        <label for="node-input-start_time"><i class="fa fa-sliders"></i> Start Time (minutes)</label>
+        <input type="text" id="node-input-start_time" placeholder="after midnight - omit if start enabled is false">
+    </div>
+    <div class="form-row">
+        <label for="node-input-end_time"><i class="fa fa-sliders"></i> End Time (minutes)</label>
+        <input type="text" id="node-input-end_time" placeholder="after midnight - omit if end enabled is false">
+    </div>
+    <div class="form-row">
+        <label for="node-input-lat"><i class="fa fa-sliders"></i> Latitude</label>
+        <input type="text" id="node-input-lat" placeholder="">
+    </div>
+    <div class="form-row">
+        <label for="node-input-lon"><i class="fa fa-sliders"></i> Longitude</label>
+        <input type="text" id="node-input-lon" placeholder="">
+    </div>
+    <div class="form-row">
+        <label for="node-input-precondition_time"><i class="fa fa-sliders"></i> Precondition Time (minutes)</label>
+        <input type="text" id="node-input-precondition_time" placeholder="minutes after midnight">
+    </div>
+    <div class="form-row">
+        <label for="node-input-value"><i class="fa fa-sliders"></i> Value</label>
+        <input type="text" id="node-input-value" placeholder="street address, lat/long, or video URL">
+    </div>
+    <div class="form-row">
+        <label for="node-input-locale"><i class="fa fa-sliders"></i> Locale</label>
+        <input type="text" id="node-input-locale" placeholder="e.g. en-US">
+    </div>
+    <div class="form-row">
+        <label for="node-input-mph"><i class="fa fa-sliders"></i> Speed Limit (mph)</label>
+        <input type="number" id="node-input-mph" placeholder="">
+    </div>
+    <div class="form-row">
+        <label for="node-input-pin"><i class="fa fa-sliders"></i> Pin</label>
+        <input type="number" id="node-input-pin" placeholder="">
+    </div>
+    <div class="form-row">
+        <label for="node-input-user_id"><i class="fa fa-sliders"></i> User ID</label>
+        <input type="number" id="node-input-user_id" placeholder="User ID of driver to delete">   
+    </div>
+
+</script>
+
+<script type="text/html" data-help-name="tessie-command">
+    <p>Send a command to a Tessie vehicle via POST request.</p>
+    <p>Specify the command and any required parameters.</p>
+
+    <p><b>All values can be overriden via inbound message:</b></p>
+    <p>See https://developer.tessie.com/reference for the full description of all queries.</p>
+     <p>Listed alphabetically:</p>
+    <ul>
+        <li>msg.amps</li>
+        <li>msg.charge_id</li>
+        <li>msg.cop_temp</li>
+        <li>msg.cost</li>
+        <li>msg.days_of_week</li>
+        <li>msg.drives (csv list of drive IDs)</li>
+        <li>msg.enabled</li>
+        <li>msg.end_end</li>
+        <li>msg.end_enabled</li>
+        <li>msg.fan_only</li>
+        <li>msg.in_seconds</li>
+        <li>msg.id</li>
+        <li>msg.lat</li>
+        <li>msg.level</li>
+        <li>msg.locale</li>
+        <li>msg.lon</li>
+        <li>msg.mode</li>
+        <li>msg.mph</li>
+        <li>msg.on (true / false)</li>
+        <li>msg.one_time</li>
+        <li>msg.percent</li>
+        <li>msg.pin</li>
+        <li>msg.plate</li>
+        <li>msg.precondition_time</li>
+        <li>msg.seat</li>
+        <li>msg.start_enabled</li>
+        <li>msg.start_time</li>
+        <li>msg.tag</li>
+        <li>msg.temperature</li>
+        <li>msg.user_id (for delete driver command)</li>
+        <li>msg.value</li>
+        <li>msg.wait_for_completion (true / false)</li>
+    </ul>
+    <p>If a property is present in the inbound message, it will override the node editor value for that query.</p>
+
+</script>

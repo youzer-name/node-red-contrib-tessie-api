@@ -1,0 +1,28 @@
+{
+  "name": "node-red-contrib-tessie-api",
+  "node-red" : {
+	"nodes": {
+    "tessie-server": "tessie-server.js",
+    "tessie-vehicle": "tessie-vehicle.js",
+    "tessie-query": "tessie-query.js",
+    "tessie-command": "tessie-command.js",
+    "tessie-energy-site": "tessie-energy-site.js",
+    "tessie-energy-query": "tessie-energy-query.js",
+    "tessie-energy-command": "tessie-energy-command.js"
+		}
+	},
+  "version": "1.0.0",
+    "description": "Tessie API nodes for Node-RED",
+    "repository": {
+    "type": "git",
+    "url": "https://github.com/youzer-name/node-red-contrib-tessie-api.git"
+  },
+    "keywords": [
+    "node-red",
+    "tesla",
+    "tessie",
+    "powerwall"
+  ],
+  "author": "@youzer-name <youzer-name.sage661@passmail.net>",
+  "license": "MIT"
+}
