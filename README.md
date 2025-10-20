@@ -4,10 +4,11 @@ These nodes are designed to interact with the Tessie API (https://tessie.com) to
 
 Config nodes:
 
-- For all of the nodes, you must configure a server.  The default base URL (https://api.tessie.com) should work.  Enter a valid API token and optionally a name and save the server config
+- For all of the nodes, you must configure a server.  The default base URL is currently https://api.tessie.com.  Enter a valid API token and optionally a name and save the server config
+- For the streaming node you must configure a second sever for the websocket connection.  The default base URL is currently wss://streaming.tessie.com.  Add a valid token and optionally a name
 - For the tessie-query and tessie-command nodes, you must configure one or more vehicles.  Enter any name and the vehicle VIN and save the vehicle config
-- For the tessie-energy-query* and tessie-energy-command nodes, you must configure an energy site.  Enter any name and the site ID
-  - *You can run the 'products' query with no site configured.  Look in the msg.payload.response for the energy_site_id and add it to a site config
+- For the tessie-energy-query* and tessie-energy-command nodes, you must configure an energy site.  Enter a name and the site ID
+  - *You can run the 'products' query with no site configured.  Look in the response for the energy_site_id and add it to a site config
 
 ## Tessie Query Node
 To use the tessie-query node:
@@ -27,7 +28,7 @@ To use the tessie-energy-query node:
 - Any additional fields that are required or available will be displayed
 - All time entries are sent to the API in UTC
   - You can use the date/time pickers to create the correct RFC3339 timestamp by selecting a date and a time
-  - You can select 'Local' or 'UTC' as the mode for the time pickers.  When set to 'Local', the date and time you pick will be converted from your local TZ to UTC.  When set to 'UTC', the date and time you pick will not be modified.  You can also directly enter an RFC3339 time string without using the date and time pickers.
+  - You can select 'Local' or 'UTC' as the mode for the time pickers.  When set to 'Local', the date and time you pick will be converted from your local TZ to UTC.  When set to 'UTC', the date and time you pick will not be modified.  You can also directly enter a UTC datetime in RFC3339 format without using the date and time pickers.
 
 ## Tessie Energy Command Node
 To use the tessie-energy-command node:
@@ -49,7 +50,7 @@ The `tessie-streaming` node connects to the Tessie WebSocket API for real-time s
 
 ### Inputs
 
-You can use the node input to stop and start the process, or to set the top-level MQTT topic.
+You can use the node input to stop and start the process or check the 'Auto-start on deploy' option
 - `msg.payload = "start"` — Starts streaming and periodic refresh
 - `msg.payload = "stop"` — Stops all activity
 
@@ -57,16 +58,17 @@ If you do not check the 'Auto-start on deploy' option, the node will not do anyt
 
 ### Outputs
 
-- **Output 1**: Parsed vehicle data (individual or grouped messages)
-- **Output 2**: Raw debug data (if debug mode is enabled)
+- **Output 1**: Parsed vehicle data with topic and payload for sending via MQTT
+- **Output 2**: Debug data (if debug mode is enabled)
 
 ### Configuration
 
 To use the streaming node you must have at least one vehicle and two servers configured.  Currently the server Base URLs should be set to https://api.tessie.com and wss://streaming.tessie.com.
-- **Vehicle**: Create or select a vehicle config node (includes VIN).  The name configured for this vehicle will be used as the second element of the MQTT topic, after Topic Root.
-- **Server**: Create or select the Tessie API server config (base URL and token)
-- **Stream Server**: Create or select the Tessie websocket streaming server config (WebSocket URL and token)
+- **Vehicle**: Create or select a vehicle config.  The name configured for this vehicle will be used as the second element of the MQTT topic, after Topic Root.
+- **Server**: Create or select the Tessie API server config
+- **Stream Server**: Create or select the Tessie websocket streaming server config
 - **Topic Root**: Base topic prefix for output messages
+  - So if you set you Topic Root to "tessie_api" and select a vehicle named "MyModel3", the topic for all messages sent by the node will start with "tessie_api/MyModel3/"
 - **Refresh Interval**: Polling interval in seconds for REST API.  Set to 0 to disable periodic refresh.
 - **Units**: Metric or Imperial
 - **Whitelist/Blacklist**: Filter keys to include/exclude from the output
