@@ -65,7 +65,10 @@ module.exports = function (RED) {
             BatteryVoltage: "charge_state/battery_voltage",
             ModuleTempMin: "charge_state/module_temp_min",
             ModuleTempMax: "charge_state/module_temp_max",
-            LifetimeEnergyUsed: "charge_state/lifetime_energy_used"
+            LifetimeEnergyUsed: "charge_state/lifetime_energy_used",
+            ChargeCurrentRequestMax: "charge_state/charge_current_request_max",
+            ChargeCurrentRequest: "charge_state/charge_current_request",
+            ChargeAmps: "charge_state/charge_amps"
         };
 
         const driveState = {
@@ -76,7 +79,11 @@ module.exports = function (RED) {
             Heading: "drive_state/heading",
             GpsHeading: "drive_state/heading", // alias
             Latitude: "drive_state/latitude",
-            Longitude: "drive_state/longitude"
+            Longitude: "drive_state/longitude",
+            MilesToArrival: "drive_state/active_route_miles_to_arrival",
+            MinutesToArrival: "drive_state/active_route_minutes_to_arrival",
+            DestinationName: "drive_state/active_route_destination",
+            ExpectedEnergyPercentAtTripArrival: "drive_state/active_route_energy_at_arrival"
         };
 
         const climateState = {
@@ -90,10 +97,19 @@ module.exports = function (RED) {
             IsRearDefrosterOn: "climate_state/is_rear_defroster_on",
             BatteryHeater: "climate_state/battery_heater",
             BatteryHeaterOn: "climate_state/battery_heater_on",
-            BatteryHeaterActive: "climate_state/battery_heater_on", // alias
+            BatteryHeaterActive: "climate_state/battery_heater_on",
             IsClimateOn: "climate_state/is_climate_on",
             IsPreconditioning: "climate_state/is_preconditioning",
-            CabinOverheatProtection: "climate_state/cabin_overheat_protection"
+            CabinOverheatProtection: "climate_state/cabin_overheat_protection",
+            HvacSteeringWheelHeatLevel: "climate_state/steering_wheel_heat_level",
+            ClimateSeatCoolingFrontLeft: "climate_state/seat_heater_left", 
+            ClimateSeatCoolingFrontRight: "climate_state/seat_heater_right", 
+            HvacLeftTemperatureRequest: "climate_state/driver_temp_setting", 
+            SeatHeaterLeft: "climate_state/seat_heater_left",
+            SeatHeaterRight: "climate_state/seat_heater_right",
+            SeatHeaterRearLeft: "climate_state/seat_heater_rear_left",
+            SeatHeaterRearRight: "climate_state/seat_heater_rear_right",
+            SeatHeaterRearCenter: "climate_state/seat_heater_rear_center"
         };
 
         const vehicleState = {
@@ -104,23 +120,37 @@ module.exports = function (RED) {
             TpmsPressureFrontLeft: "vehicle_state/tpms_pressure_fl",
             TpmsPressureFrontRight: "vehicle_state/tpms_pressure_fr",
             TpmsPressureRearLeft: "vehicle_state/tpms_pressure_rl",
-            TpmsPressureRearRight: "vehicle_state/tpms_pressure_rr"
+            TpmsPressureRearRight: "vehicle_state/tpms_pressure_rr",
+            SoftwareUpdateVersion: "vehicle_state/software_update/version",
+            SoftwareUpdateDownloadPercentComplete: "vehicle_state/software_update/download_perc",
+            SoftwareUpdateInstallationPercentComplete: "vehicle_state/software_update/install_perc",
+            CurrentLimitMph: "vehicle_state/speed_limit_mode/current_limit_mph",
+            VehicleName: "vehicle_state/vehicle_name",
+            Version: "vehicle_state/car_version",
+            MediaAudioVolumeMax: "vehicle_state/media_info/audio_volume_max",
+            MediaNowPlayingAlbum: "vehicle_state/media_info/now_playing_album",
+            MediaNowPlayingArtist: "vehicle_state/media_info/now_playing_artist",
+            MediaNowPlayingTitle: "vehicle_state/media_info/now_playing_title",
+            MediaNowPlayingStation: "vehicle_state/media_info/now_playing_station",
+            MediaNowPlayingElapsed: "vehicle_state/media_info/now_playing_elapsed",
+            MediaNowPlayingDuration: "vehicle_state/media_info/now_playing_duration",
+            MediaPlaybackSource: "vehicle_state/media_info/now_playing_source",
+            MediaAudioVolume: "vehicle_state/media_info/audio_volume",
+            MediaAudioVolumeIncrement: "vehicle_state/media_info/audio_volume_increment"
         };
 
-        const mediaInfo = {
-            MediaNowPlayingAlbum: "media_info/now_playing_album",
-            MediaNowPlayingArtist: "media_info/now_playing_artist",
-            MediaNowPlayingTitle: "media_info/now_playing_title",
-            MediaNowPlayingStation: "media_info/now_playing_station",
-            MediaNowPlayingElapsed: "media_info/now_playing_elapsed",
-            MediaNowPlayingDuration: "media_info/now_playing_duration",
-            MediaPlaybackSource: "media_info/now_playing_source",
-            MediaAudioVolume: "media_info/audio_volume"
+        const vehicleConfigMap = {
+            WheelType: "vehicle_config/wheel_type"
         };
+
+
 
         const misc = {
           Timestamp: "timestamp"
         };
+
+        // DCChargingPower: "charge_state/dc_charging_power", // TODO: confirm correct mapping
+        // ACChargingPower: "charge_state/ac_charging_power", // TODO: confirm correct mapping
 
 
         const streamingKeyMap = {
@@ -128,7 +158,7 @@ module.exports = function (RED) {
             ...driveState,
             ...climateState,
             ...vehicleState,
-            ...mediaInfo,
+            ...vehicleConfigMap,
             ...misc
         };
 
@@ -301,9 +331,11 @@ module.exports = function (RED) {
                         const groupedPayload = {};
                         for (const key in flattened) {
                             const val = flattened[key];
+                            const isSpecificallyWhitelisted = whitelist.some(w => key === w);
                             const isWhitelisted = whitelist.length === 0 || whitelist.some(w => key.startsWith(w));
                             const isBlacklisted = blacklist.some(b => key.startsWith(b));
-                            if (isWhitelisted && !isBlacklisted) {
+
+                            if (isSpecificallyWhitelisted || (isWhitelisted && !isBlacklisted)) {
                                 groupedPayload[key] = convertUnits(key, val);
                             }
                         }
