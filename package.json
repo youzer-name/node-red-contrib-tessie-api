@@ -8,7 +8,8 @@
     "tessie-command": "tessie-command.js",
     "tessie-energy-site": "tessie-energy-site.js",
     "tessie-energy-query": "tessie-energy-query.js",
-    "tessie-energy-command": "tessie-energy-command.js"
+    "tessie-energy-command": "tessie-energy-command.js",
+    "tessie-streaming": "tessie-streaming.js"
 		}
 	},
   "version": "1.0.0",

@@ -2,7 +2,7 @@
     RED.nodes.registerType('tessie-server',{
         category: 'config',
         defaults: {
-            baseUrl: {value:"https://api.tessie.com",required:true},
+            baseUrl: {value:"",required:true},
             tessieservername: {value:"Tessie Server",required:true},
             token: {value:""},
             },
@@ -19,7 +19,7 @@
     </div>
     <div class="form-row">
         <label for="node-config-input-baseUrl"><i class="fa fa-link"></i> Base URL</label>
-    <input type="text" id="node-config-input-baseUrl" placeholder="https://api.tessie.com">
+    <input type="text" id="node-config-input-baseUrl" placeholder="https://api.tessie.com / wss://streaming.tessie.com">
     </div>
     <div class="form-row">
         <label for="node-config-input-token"><i class="fa fa-key"></i> Token</label>
@@ -29,3 +29,9 @@
 </script>
 
 
+<script type="text/html" data-help-name="tessie-server">
+    <p><strong>Tessie Server Config</strong></p>
+    <p>Configure the Base URL for the server and enter a valid Tessie token.</p>
+    <p>Use https://api.tessie.com for the regular Tessie API.</p>
+    <p>Use wss://streaming.tessie.com for the streaming server config (only used in the tessie-streaming node).</p>
+</script>

@@ -1,0 +1,152 @@
+<script type="text/javascript">
+    RED.nodes.registerType('tessie-streaming', {
+        category: 'tessie',
+        color: '#E7E7AE',
+        defaults: {
+            name: { value: "" },
+            vehicle: { type: "tessie-vehicle", required: true },
+            server: { type: "tessie-server", required: true },
+            streamServer: { type: "tessie-server", required: true },
+            topicRoot: { value: "tessie-api" },
+            refreshInterval: { value: 300 },
+            debug: { value: false },
+            units: { value: "metric" },
+            whitelist: { value: "" },
+            blacklist: { value: "" },
+            autoStart: { value: "" },
+            groupOutput: { value: "" }
+
+        },
+        inputs: 1,
+        outputs: 2,
+        icon: "font-awesome/fa-rss",
+        label: function () {
+            return this.name || "tessie-streaming";
+        },
+        paletteLabel: 'tessie streaming',
+
+        oneditprepare: function () {
+            $("#node-input-autoStart").prop("checked", this.autoStart);
+            $("#node-input-groupOutput").prop("checked", this.groupOutput);
+        },
+
+        oneditsave: function () {
+            var name = $("#node-input-name").val();
+            if (!name) {
+                $("#node-input-name").val("tessie streaming");
+            }
+            this.autoStart = $("#node-input-autoStart").prop("checked");
+            this.groupOutput = $("#node-input-groupOutput").prop("checked");
+        }
+
+
+    });
+</script>
+
+<script type="text/html" data-template-name="tessie-streaming">
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-input-name">
+    </div>
+
+    <div class="form-row">
+        <label for="node-input-vehicle"><i class="fa fa-car"></i> Vehicle</label>
+        <input type="text" id="node-input-vehicle">
+    </div>
+
+    <div class="form-row">
+        <label for="node-input-server"><i class="fa fa-server"></i> Tessie API Server</label>
+        <input type="text" id="node-input-server">
+    </div>
+
+    <div class="form-row">
+        <label for="node-input-streamServer"><i class="fa fa-bolt"></i> Streaming Server</label>
+        <input type="text" id="node-input-streamServer">
+    </div>
+
+    <div class="form-row">
+        <label for="node-input-topicRoot"><i class="fa fa-comment"></i> MQTT Topic Root</label>
+        <input type="text" id="node-input-topicRoot">
+    </div>
+
+    <div class="form-row">
+        <label for="node-input-refreshInterval"><i class="fa fa-clock-o"></i> Refresh Interval (sec)</label>
+        <input type="number" id="node-input-refreshInterval" min="10">
+    </div>
+    <div class="form-row">
+        <label for="node-input-autoStart"><i class="fa fa-play-circle"></i> Auto-start on deploy</label>
+        <input type="checkbox" id="node-input-autoStart">
+    </div>
+
+    <div class="form-row">
+        <label for="node-input-units"><i class="fa fa-balance-scale"></i> Units</label>
+        <select id="node-input-units">
+            <option value="metric">Metric (°C, km/h)</option>
+            <option value="imperial">Imperial (°F, mph)</option>
+        </select>
+    </div>
+    <div class="form-row">
+        <label for="node-input-groupOutput"><i class="fa fa-object-group"></i> Group periodic refresh into one message</label>
+        <input type="checkbox" id="node-input-groupOutput">
+    </div>
+
+        <div class="form-row">
+        <label for="node-input-whitelist"><i class="fa fa-check-circle"></i> Whitelist (comma-separated)</label>
+        <input type="text" id="node-input-whitelist">
+    </div>
+    <div class="form-row">
+        <label for="node-input-blacklist"><i class="fa fa-ban"></i> Blacklist (comma-separated)</label>
+        <input type="text" id="node-input-blacklist">
+    </div>
+    <div class="form-row">
+        <label for="node-input-debug"><i class="fa fa-bug"></i> Debug</label>
+        <input type="checkbox" id="node-input-debug">
+    </div>
+</script>
+
+<script type="text/html" data-help-name="tessie-streaming">
+    <p><strong>Tessie Streaming Node</strong></p>
+    <p>This node connects to the Tessie WebSocket API for real-time streaming data and periodically polls the REST API for full vehicle state data.</p>
+    <p>The main output from the node is a topic and payload intended for sending to an MQTT out node to publish the data via MQTT.</p>
+
+    <h4>Inputs</h4>
+    <ul>
+        You can use the node input to stop and start the process, or to set the top-level MQTT topic.
+        <li><code>msg.payload = "start"</code> — Starts the WebSocket stream and periodic refresh.</li>
+        <li><code>msg.payload = "stop"</code> — Stops all activity and disconnects.</li>
+    </ul>
+
+    <p>If you do not check the 'Auto-start on deploy' option, the node will not do anything until it receives a start message.</p>
+
+    <h4>Outputs</h4>
+    <ol>
+        <li><strong>Primary Output</strong>: Individual or grouped messages with vehicle data (depending on configuration).</li>
+        <li><strong>Debug Output</strong>: Raw data from Tessie for debugging (only if debug mode is enabled).</li>
+    </ol>
+
+    <h4>Configuration</h4>
+    <p>To use the streaming node you must have at least one vehicle and two servers configured.  Currently the server Base URLs should be set to https://api.tessie.com and wss://streaming.tessie.com.</p>
+    
+    <ul>
+        <li><strong>Vehicle</strong>: Create or select a vehicle.  The name configured for this vehicle will be used as the second element of the MQTT topic, after Topic Root.</li>
+        <li><strong>Server</strong>: Tessie API server configuration (includes base URL and token).</li>
+        <li><strong>Stream Server</strong>: Tessie streaming server configuration (WebSocket token and URL).</li>
+        <li><strong>Topic Root</strong>: Base MQTT topic prefix for output messages.</li>
+        <li><strong>Refresh Interval</strong>: How often (in seconds) to poll the REST API for full vehicle state.  Set to 0 to disable</li>
+        <li><strong>Units</strong>: Choose between metric or imperial units for speed, distance, and temperature.</li>
+        <li><strong>Whitelist/Blacklist</strong>: Optional filters to include or exclude specific data keys in the output.</li>
+        <li><strong>Group Output</strong>: If enabled, periodic refresh data is sent as a single grouped message.</li>
+        <li><strong>Debug</strong>: Enables verbose logging and sends raw data to the debug output.</li>
+        <li><strong>Auto Start</strong>: Automatically starts streaming when the flow is deployed.</li>
+    </ul>
+
+    <h4>Status Indicators</h4>
+    <ul>
+        <li><span style="color:green;">Green</span>: Connected and healthy.</li>
+        <li><span style="color:yellow;">Yellow</span>: Starting up.</li>
+        <li><span style="color:red;">Red</span>: Error in streaming or refresh.</li>
+        <li><span style="color:gray;">Gray</span>: Stopped or waiting for start signal.</li>
+    </ul>
+
+    <p>Use this node to integrate real-time Tesla data into your automations, dashboards, or MQTT flows.</p>
+</script>
