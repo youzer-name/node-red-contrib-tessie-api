@@ -38,7 +38,9 @@
             locale: {value:"en-US", required:false},
             mph: {value:"", required:false},
             pin: {value:"", required:false},
-            user_id: {value:"", required:false}
+            user_id: {value:"", required:false},
+            schedule_id: {value:"", required:false},
+            driver_id: {value:"", required:false}
         },
             
         inputs: 1,
@@ -55,9 +57,9 @@
             // Setup typedInput for all new number fields (fractional allowed)
             var numberFields = [
                 "#node-input-cost", "#node-input-temperature", "#node-input-level", "#node-input-cop_temp",
-                "#node-input-percent", "#node-input-amps", "#node-input-in_seconds", "#node-input-id_string", "#node-input-id_int",
+                "#node-input-percent", "#node-input-amps", "#node-input-in_seconds", "#node-input-schedule_id",
                 "#node-input-start_time", "#node-input-end_time", "#node-input-lat", "#node-input-lon",
-                "#node-input-precondition_time", "#node-input-value", "#node-input-mph", "#node-input-user_id"
+                "#node-input-precondition_time", "#node-input-value", "#node-input-mph", "#node-input-user_id", "#node-input-driver_id"
             ];
             numberFields.forEach(function(sel) {
                 $(sel).typedInput({type:'num',types:['num']});
@@ -96,7 +98,6 @@
                 $("#node-input-start_enabled").closest('.form-row').hide();
                 $("#node-input-end_enabled").closest('.form-row').hide();
                 $("#node-input-one_time").closest('.form-row').hide();
-                $("#node-input-id").closest('.form-row').hide();
                 $("#node-input-start_time").closest('.form-row').hide();
                 $("#node-input-end_time").closest('.form-row').hide();
                 $("#node-input-lat").closest('.form-row').hide();
@@ -107,7 +108,8 @@
                 $("#node-input-mph").closest('.form-row').hide();
                 $("#node-input-pin").closest('.form-row').hide();
                 $("#node-input-user_id").closest('.form-row').hide();
-
+                $("#node-input-schedule_id").closest('.form-row').hide();
+                $("#node-input-driver_id").closest('.form-row').hide();
                 
                 //show fields as needed based on command
                 if (cmd === "set_tag") {
@@ -154,7 +156,7 @@
                     $("#node-input-start_enabled").closest('.form-row').show();
                     $("#node-input-end_enabled").closest('.form-row').show();
                     $("#node-input-one_time").closest('.form-row').show();
-                    $("#node-input-id").closest('.form-row').show();
+                    $("#node-input-schedule_id").closest('.form-row').show();
                     $("#node-input-start_time").closest('.form-row').show();
                     $("#node-input-end_time").closest('.form-row').show();
                     $("#node-input-lat").closest('.form-row').show();
@@ -164,13 +166,13 @@
                     $("#node-input-days_of_week").closest('.form-row').show();
                     $("#node-input-enabled").closest('.form-row').show();
                     $("#node-input-one_time").closest('.form-row').show();
-                    $("#node-input-id").closest('.form-row').show();
+                    $("#node-input-schedule_id").closest('.form-row').show();
                     $("#node-input-precondition_time").closest('.form-row').show();
                     $("#node-input-lat").closest('.form-row').show();
                     $("#node-input-lon").closest('.form-row').show();
                 } else if (cmd==="remove_charge_schedule" || cmd==="remove_precondition_schedule") {
                     $("#node-input-wait_for_completion").closest('.form-row').show();
-                    $("#node-input-id").closest('.form-row').show();
+                    $("#node-input-schedule_id").closest('.form-row').show();
                 } else if (cmd ==="share") {
                     $("#node-input-wait_for_completion").closest('.form-row').show();
                     $("#node-input-value").closest('.form-row').show();
@@ -182,8 +184,8 @@
                     $("#node-input-wait_for_completion").closest('.form-row').show();
                     $("#node-input-pin").closest('.form-row').show();
                 } else if (cmd==="delete_driver" || cmd === "revoke") {
-                    $("#node-input-id").closest('.form-row').show();
-                    $("node-input-user_id").closest('.form-row').show();
+                    $("#node-input-driver_id").closest('.form-row').show();
+                    $("#node-input-user_id").closest('.form-row').show();
                 } else if (cmd === "lock" || cmd === "unlock" || cmd === "activate_front_trunk" || cmd === "activate_rear_trunk" 
                     || cmd === "open_tonneau" || cmd === "close_tonneau" || cmd === "vent_windows" || cmd === "close_windows" 
                     || cmd === "start_climate" || cmd === "stop_climate" || cmd === "start_defrost" || cmd === "stop_defrost" 
@@ -393,8 +395,8 @@
         <input type="text" id="node-input-one_time" style="width:30%">
     </div>
     <div class="form-row">
-        <label for="node-input-id"><i class="fa fa-sliders"></i> Schedule ID</label>
-        <input type="text" id="node-input-id" placeholder="omit for new schedule">
+        <label for="node-input-schedule_id"><i class="fa fa-sliders"></i> Schedule ID</label>
+        <input type="number" id="node-input-schedule_id" placeholder="omit for new charge schedule">
     </div>
     <div class="form-row">
         <label for="node-input-start_time"><i class="fa fa-sliders"></i> Start Time (minutes)</label>
@@ -436,6 +438,10 @@
         <label for="node-input-user_id"><i class="fa fa-sliders"></i> User ID</label>
         <input type="number" id="node-input-user_id" placeholder="User ID of driver to delete">   
     </div>
+    <div class="form-row">
+        <label for="node-input-driver_id"><i class="fa fa-sliders"></i> Driver ID</label>
+        <input type="number" id="node-input-driver_id" placeholder="">   
+    </div>
 
 </script>
 
@@ -471,6 +477,7 @@
         <li>msg.pin</li>
         <li>msg.plate</li>
         <li>msg.precondition_time</li>
+        <li>msg.schedule_id (for charge and precondition schedule commands)</li>
         <li>msg.seat</li>
         <li>msg.start_enabled</li>
         <li>msg.start_time</li>

@@ -140,7 +140,7 @@ module.exports = function(RED) {
                         params.push(`start_enabled=${cfg.start_enabled}`);
                         params.push(`end_enabled=${cfg.end_enabled}`);
                         params.push(`one_time=${cfg.one_time}`);
-                        if(cfg.id) params.push(`id=${cfg.id}`);
+                        if(cfg.schedule_id) params.push(`id=${cfg.schedule_id}`);
                         params.push(`start_time=${cfg.start_time}`);
                         params.push(`end_time=${cfg.end_time}`);
                         params.push(`lat=${cfg.lat}`);
@@ -148,21 +148,21 @@ module.exports = function(RED) {
                         params.push(`wait_for_completion=${cfg.wait_for_completion}`);
                     } else if (config.command === "remove_charge_schedule") {
                         fullurl += "command/";
-                        params.push(`id=${cfg.id}`);
+                        params.push(`id=${cfg.schedule_id}`);
                         params.push(`wait_for_completion=${cfg.wait_for_completion}`);
                     } else if (config.command === "add_precondition_schedule") {
                         fullurl += "command/";
                         params.push(`days_of_week=${cfg.days_of_week}`);
                         params.push(`enabled=${cfg.enabled}`);
                         params.push(`one_time=${cfg.one_time}`);
-                        if(cfg.id) params.push(`id=${cfg.id}`);
+                        if(cfg.schedule_id) params.push(`id=${cfg.schedule_id}`);
                         params.push(`precondition_time=${cfg.precondition_time}`);
                         params.push(`lat=${cfg.lat}`);
                         params.push(`lon=${cfg.lon}`);
                         params.push(`wait_for_completion=${cfg.wait_for_completion}`);
                     } else if (config.command === "remove_precondition_schedule") {
                         fullurl += "command/";
-                        params.push(`id=${cfg.id}`);
+                        params.push(`id=${cfg.schedule_id}`);
                         params.push(`wait_for_completion=${cfg.wait_for_completion}`);
                     } else if (config.command === "share") {
                         fullurl += "command/";
@@ -179,7 +179,7 @@ module.exports = function(RED) {
                         params.push(`pin=${cfg.pin}`);
                         params.push(`wait_for_completion=${cfg.wait_for_completion}`);
                     } else if (config.command === "delete") {
-                        fullurl += `drivers/${cfg.id}/`;
+                        fullurl += `drivers/${cfg.driver_id}/`;
                         options.body.id = parseInt(cfg.user_id);
                         params.push(`wait_for_completion=${cfg.wait_for_completion}`);
                     } else if (config.command === "revoke") {
