@@ -83,18 +83,18 @@ To use the streaming node you must have at least one vehicle and two servers con
 - 🔴 **Red**: Error in streaming or refresh
 - ⚪ **Gray**: Stopped or idle
 
-## 🔍 Whitelist and Blacklist Filtering Logic
+## Whitelist and Blacklist Filtering Logic
 
 This node supports optional `whitelist` and `blacklist` filters to control which telemetry keys are published. These filters use **prefix matching**, and follow a clear precedence rule:
 
-### ✅ Precedence Rule
+### Precedence Rule
 > **Specific whitelisted keys override broader blacklists.**
 
 This means if a key matches both a whitelist and a blacklist, the whitelist takes priority and the key will be included.
 
 ---
 
-### 🧪 Behavior Examples
+### Behavior Examples
 
 | Scenario | Result |
 |----------|--------|
@@ -104,7 +104,7 @@ This means if a key matches both a whitelist and a blacklist, the whitelist take
 
 ---
 
-### 🛠 Notes
+### Notes
 - Filters use **prefix matching**, so `charge_state` matches all keys like `charge_state/battery_level`, `charge_state/charging_state`, etc.
 - Whitelist entries can be **specific keys** or **prefixes**.
 - If the whitelist is **empty**, all keys are considered whitelisted by default.
