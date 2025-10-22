@@ -267,13 +267,17 @@ module.exports = function (RED) {
                 node.status({ fill: "gray", shape: "ring", text: "Stopped" });
             } else if (isStarting) {
                 node.status({ fill: "yellow", shape: "ring", text: "Starting..." });
-    }        else if (streamingHealthy && refreshHealthy) {
+            } else if (streamingHealthy && refreshHealthy) {
                 node.status({ fill: "green", shape: "dot", text: `Connected. Next refresh: ${nextRefreshTime()}` });
             } else {
                 const issues = [];
                 if (!streamingHealthy) issues.push("streaming");
                 if (!refreshHealthy) issues.push("refresh");
-                node.status({ fill: "red", shape: "ring", text: `Error: ${issues.join(" & ")} failed` });
+                node.status({
+                    fill: "red",
+                    shape: "ring",
+                    text: `Error: ${issues.join(" & ")} failed. Next refresh: ${nextRefreshTime()}`
+                });
             }
         }
 
@@ -364,6 +368,14 @@ module.exports = function (RED) {
                                     return;
                                 }
 
+                                if (key === "location" && item.value?.locationValue) { //special handling for location topics
+                                    const lat = item.value.locationValue.latitude;
+                                    const lon = item.value.locationValue.longitude;
+                                    node.send([{ topic: `${topicRoot}/${vehicleName}/drive_state/latitude`, payload: lat }, null]);
+                                    node.send([{ topic: `${topicRoot}/${vehicleName}/drive_state/longitude`, payload: lon }, null]);
+                                    return;
+                                }
+
                                 if (nestedObjectKeys[key]) {
                                     const { prop, baseTopic, subfields } = nestedObjectKeys[key];
                                     const nested = item.value?.[prop];
@@ -379,14 +391,6 @@ module.exports = function (RED) {
                                         }
                                         return;
                                     }
-                                }
-
-                                if (key === "location" && item.value?.locationValue) { //special handling for location topics
-                                    const lat = item.value.locationValue.latitude;
-                                    const lon = item.value.locationValue.longitude;
-                                    node.send([{ topic: `${topicRoot}/${vehicleName}/drive_state/latitude`, payload: lat }, null]);
-                                    node.send([{ topic: `${topicRoot}/${vehicleName}/drive_state/longitude`, payload: lon }, null]);
-                                    return;
                                 }
 
                                 const val = extractValue(item.value);
@@ -471,7 +475,8 @@ module.exports = function (RED) {
                     const url = `${baseUrl}/${vin}/state`;
                     if (debug) node.log(`Requesting vehicle state from: ${url}`);
                     const res = await axios.get(url, {
-                        headers: { Authorization: `Bearer ${queryToken}` }
+                        headers: { Authorization: `Bearer ${queryToken}` },
+                        timeout: 10000
                     });
                     const data = res.data;
                     const flattened = flattenObject(data);
