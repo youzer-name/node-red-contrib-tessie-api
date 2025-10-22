@@ -38,120 +38,134 @@ module.exports = function (RED) {
 
 
         //map streaming keys to REST API keys
+        // NOTE: All keys in this map must be lowercase to ensure consistent lookup and filtering.
         const chargeState = {
-            BatteryLevel: "charge_state/battery_level",
-            Soc: "charge_state/battery_level", // alias
-            RatedRange: "charge_state/battery_range",
-            IdealBatteryRange: "charge_state/ideal_battery_range",
-            EstBatteryRange: "charge_state/est_battery_range",
-            ChargeEnergyAdded: "charge_state/charge_energy_added",
-            ChargerVoltage: "charge_state/charger_voltage",
-            ChargerPower: "charge_state/charger_power",
-            ChargerPhases: "charge_state/charger_phases",
-            ChargerActualCurrent: "charge_state/charger_actual_current",
-            ChargeLimitSoc: "charge_state/charge_limit_soc",
-            ChargePortDoorOpen: "charge_state/charge_port_door_open",
-            ChargePortLatch: "charge_state/charge_port_latch",
-            ChargingState: "charge_state/charging_state",
-            IsCharging: "charge_state/charging_state", // alias
-            TimeToFullCharge: "charge_state/time_to_full_charge",
-            FastChargerPresent: "charge_state/fast_charger_present",
-            ScheduledChargingPending: "charge_state/scheduled_charging_pending",
-            ScheduledChargingStartTime: "charge_state/scheduled_charging_start_time",
-            EnergyRemaining: "charge_state/energy_remaining",
-            PackVoltage: "charge_state/pack_voltage",
-            PackCurrent: "charge_state/pack_current",
-            BatteryCurrent: "charge_state/battery_current",
-            BatteryVoltage: "charge_state/battery_voltage",
-            ModuleTempMin: "charge_state/module_temp_min",
-            ModuleTempMax: "charge_state/module_temp_max",
-            LifetimeEnergyUsed: "charge_state/lifetime_energy_used",
-            ChargeCurrentRequestMax: "charge_state/charge_current_request_max",
-            ChargeCurrentRequest: "charge_state/charge_current_request",
-            ChargeAmps: "charge_state/charge_amps"
+            batterylevel: "charge_state/battery_level",
+            soc: "charge_state/battery_level", // alias
+            ratedrange: "charge_state/battery_range",
+            idealbatteryrange: "charge_state/ideal_battery_range",
+            estbatteryrange: "charge_state/est_battery_range",
+            chargeenergyadded: "charge_state/charge_energy_added",
+            chargervoltage: "charge_state/charger_voltage",
+            chargerpower: "charge_state/charger_power",
+            chargerphases: "charge_state/charger_phases",
+            chargeractualcurrent: "charge_state/charger_actual_current",
+            chargelimitsoc: "charge_state/charge_limit_soc",
+            chargeportdooropen: "charge_state/charge_port_door_open",
+            chargeportlatch: "charge_state/charge_port_latch",
+            chargingstate: "charge_state/charging_state",
+            ischarging: "charge_state/charging_state", // alias
+            timetofullcharge: "charge_state/time_to_full_charge",
+            fastchargerpresent: "charge_state/fast_charger_present",
+            scheduledchargingpending: "charge_state/scheduled_charging_pending",
+            scheduledchargingstarttime: "charge_state/scheduled_charging_start_time",
+            energyremaining: "charge_state/energy_remaining",
+            packvoltage: "charge_state/pack_voltage",
+            packcurrent: "charge_state/pack_current",
+            batterycurrent: "charge_state/battery_current",
+            batteryvoltage: "charge_state/battery_voltage",
+            moduletempmin: "charge_state/module_temp_min",
+            moduletempmax: "charge_state/module_temp_max",
+            lifetimeenergyused: "charge_state/lifetime_energy_used",
+            chargecurrentrequestmax: "charge_state/charge_current_request_max",
+            chargecurrentrequest: "charge_state/charge_current_request",
+            chargeamps: "charge_state/charge_amps"
         };
 
         const driveState = {
-            Speed: "drive_state/speed",
-            VehicleSpeed: "drive_state/speed", // alias
-            Power: "drive_state/power",
-            ShiftState: "drive_state/shift_state",
-            Heading: "drive_state/heading",
-            GpsHeading: "drive_state/heading", // alias
-            Latitude: "drive_state/latitude",
-            Longitude: "drive_state/longitude",
-            MilesToArrival: "drive_state/active_route_miles_to_arrival",
-            MinutesToArrival: "drive_state/active_route_minutes_to_arrival",
-            DestinationName: "drive_state/active_route_destination",
-            ExpectedEnergyPercentAtTripArrival: "drive_state/active_route_energy_at_arrival"
+            speed: "drive_state/speed",
+            vehiclespeed: "drive_state/speed", // alias
+            power: "drive_state/power",
+            shiftstate: "drive_state/shift_state",
+            heading: "drive_state/heading",
+            gpsheading: "drive_state/heading", // alias
+            latitude: "drive_state/latitude",
+            longitude: "drive_state/longitude",
+            milestoarrival: "drive_state/active_route_miles_to_arrival",
+            minutestoarrival: "drive_state/active_route_minutes_to_arrival",
+            destinationname: "drive_state/active_route_destination",
+            expectedenergypercentattriparrival: "drive_state/active_route_energy_at_arrival"
         };
 
         const climateState = {
-            InsideTemp: "climate_state/inside_temp",
-            OutsideTemp: "climate_state/outside_temp",
-            DriverTempSetting: "climate_state/driver_temp_setting",
-            PassengerTempSetting: "climate_state/passenger_temp_setting",
-            IsAutoConditioningOn: "climate_state/is_auto_conditioning_on",
-            FanStatus: "climate_state/fan_status",
-            IsFrontDefrosterOn: "climate_state/is_front_defroster_on",
-            IsRearDefrosterOn: "climate_state/is_rear_defroster_on",
-            BatteryHeater: "climate_state/battery_heater",
-            BatteryHeaterOn: "climate_state/battery_heater_on",
-            BatteryHeaterActive: "climate_state/battery_heater_on",
-            IsClimateOn: "climate_state/is_climate_on",
-            IsPreconditioning: "climate_state/is_preconditioning",
-            CabinOverheatProtection: "climate_state/cabin_overheat_protection",
-            HvacSteeringWheelHeatLevel: "climate_state/steering_wheel_heat_level",
-            ClimateSeatCoolingFrontLeft: "climate_state/seat_heater_left", 
-            ClimateSeatCoolingFrontRight: "climate_state/seat_heater_right", 
-            HvacLeftTemperatureRequest: "climate_state/driver_temp_setting", 
-            SeatHeaterLeft: "climate_state/seat_heater_left",
-            SeatHeaterRight: "climate_state/seat_heater_right",
-            SeatHeaterRearLeft: "climate_state/seat_heater_rear_left",
-            SeatHeaterRearRight: "climate_state/seat_heater_rear_right",
-            SeatHeaterRearCenter: "climate_state/seat_heater_rear_center"
+            insidetemp: "climate_state/inside_temp",
+            outsidetemp: "climate_state/outside_temp",
+            drivertempsetting: "climate_state/driver_temp_setting",
+            passengertempsetting: "climate_state/passenger_temp_setting",
+            isautoconditioningon: "climate_state/is_auto_conditioning_on",
+            fanstatus: "climate_state/fan_status",
+            isfrontdefrosteron: "climate_state/is_front_defroster_on",
+            isreardefrosteron: "climate_state/is_rear_defroster_on",
+            batteryheater: "climate_state/battery_heater",
+            batteryheateron: "climate_state/battery_heater_on",
+            batteryheateractive: "climate_state/battery_heater_on",
+            isclimateon: "climate_state/is_climate_on",
+            ispreconditioning: "climate_state/is_preconditioning",
+            cabinoverheatprotection: "climate_state/cabin_overheat_protection",
+            hvacsteeringwheelheatlevel: "climate_state/steering_wheel_heat_level",
+            climateseatcoolingfrontleft: "climate_state/seat_heater_left", 
+            climateseatcoolingfrontright: "climate_state/seat_heater_right", 
+            hvaclefttemperaturerequest: "climate_state/driver_temp_setting", 
+            seatheaterleft: "climate_state/seat_heater_left",
+            seatheaterright: "climate_state/seat_heater_right",
+            seatheaterrearleft: "climate_state/seat_heater_rear_left",
+            seatheaterrearright: "climate_state/seat_heater_rear_right",
+            seatheaterrearcenter: "climate_state/seat_heater_rear_center"
         };
 
         const vehicleState = {
-            Odometer: "vehicle_state/odometer",
-            IsUserPresent: "vehicle_state/is_user_present",
-            IsDriverPresent: "vehicle_state/is_driver_present",
-            IsVehicleLocked: "vehicle_state/locked",
-            TpmsPressureFrontLeft: "vehicle_state/tpms_pressure_fl",
-            TpmsPressureFrontRight: "vehicle_state/tpms_pressure_fr",
-            TpmsPressureRearLeft: "vehicle_state/tpms_pressure_rl",
-            TpmsPressureRearRight: "vehicle_state/tpms_pressure_rr",
-            SoftwareUpdateVersion: "vehicle_state/software_update/version",
-            SoftwareUpdateDownloadPercentComplete: "vehicle_state/software_update/download_perc",
-            SoftwareUpdateInstallationPercentComplete: "vehicle_state/software_update/install_perc",
-            CurrentLimitMph: "vehicle_state/speed_limit_mode/current_limit_mph",
-            VehicleName: "vehicle_state/vehicle_name",
-            Version: "vehicle_state/car_version",
-            MediaAudioVolumeMax: "vehicle_state/media_info/audio_volume_max",
-            MediaNowPlayingAlbum: "vehicle_state/media_info/now_playing_album",
-            MediaNowPlayingArtist: "vehicle_state/media_info/now_playing_artist",
-            MediaNowPlayingTitle: "vehicle_state/media_info/now_playing_title",
-            MediaNowPlayingStation: "vehicle_state/media_info/now_playing_station",
-            MediaNowPlayingElapsed: "vehicle_state/media_info/now_playing_elapsed",
-            MediaNowPlayingDuration: "vehicle_state/media_info/now_playing_duration",
-            MediaPlaybackSource: "vehicle_state/media_info/now_playing_source",
-            MediaAudioVolume: "vehicle_state/media_info/audio_volume",
-            MediaAudioVolumeIncrement: "vehicle_state/media_info/audio_volume_increment"
+            odometer: "vehicle_state/odometer",
+            isuserpresent: "vehicle_state/is_user_present",
+            isdriverpresent: "vehicle_state/is_driver_present",
+            isvehiclelocked: "vehicle_state/locked",
+            tpmspressurefrontleft: "vehicle_state/tpms_pressure_fl",
+            tpmspressurefrontright: "vehicle_state/tpms_pressure_fr",
+            tpmspressurerearleft: "vehicle_state/tpms_pressure_rl",
+            tpmspressurerearright: "vehicle_state/tpms_pressure_rr",
+            tpmspressurefl: "vehicle_state/tpms_pressure_fl",
+            tpmspressurefr: "vehicle_state/tpms_pressure_fr",
+            tpmspressurerl: "vehicle_state/tpms_pressure_rl",
+            tpmspressurerr: "vehicle_state/tpms_pressure_rr",
+            softwareupdateversion: "vehicle_state/software_update/version",
+            softwareupdatedownloadpercentcomplete: "vehicle_state/software_update/download_perc",
+            softwareupdateinstallationpercentcomplete: "vehicle_state/software_update/install_perc",
+            currentlimitmph: "vehicle_state/speed_limit_mode/current_limit_mph",
+            vehiclename: "vehicle_state/vehicle_name",
+            version: "vehicle_state/car_version",
+            mediaaudiovolumemax: "vehicle_state/media_info/audio_volume_max",
+            medianowplayingalbum: "vehicle_state/media_info/now_playing_album",
+            medianowplayingartist: "vehicle_state/media_info/now_playing_artist",
+            medianowplayingtitle: "vehicle_state/media_info/now_playing_title",
+            medianowplayingstation: "vehicle_state/media_info/now_playing_station",
+            medianowplayingelapsed: "vehicle_state/media_info/now_playing_elapsed",
+            medianowplayingduration: "vehicle_state/media_info/now_playing_duration",
+            mediaplaybacksource: "vehicle_state/media_info/now_playing_source",
+            mediaaudiovolume: "vehicle_state/media_info/audio_volume",
+            mediaaudiovolumeincrement: "vehicle_state/media_info/audio_volume_increment"
         };
 
         const vehicleConfigMap = {
-            WheelType: "vehicle_config/wheel_type"
+            wheeltype: "vehicle_config/wheel_type"
         };
-
-
 
         const misc = {
-          Timestamp: "timestamp"
+            timestamp: "timestamp",
+            acchargingpower: "charge_state/ac_charging_power",
+            batteryheateron: "climate_state/battery_heater_on",
+            chargeenablerequest: "charge_state/charge_enable_request",
+            chargeportdooropen: "charge_state/charge_port_door_open",
+            chargeportlatch: "charge_state/charge_port_latch",
+            driverseatoccupied: "vehicle_state/driver_seat_occupied",
+            fastchargertype: "charge_state/fast_charger_type",
+            locked: "vehicle_state/locked",
+            speedlimitmode: "vehicle_state/speed_limit_mode/enabled",
+            timetofullcharge: "charge_state/time_to_full_charge",
+            tpmslastseenpressuretimefl: "vehicle_state/tpms_last_seen_pressure_time_fl",
+            tpmslastseenpressuretimefr: "vehicle_state/tpms_last_seen_pressure_time_fr",
+            tpmslastseenpressuretimerr: "vehicle_state/tpms_last_seen_pressure_time_rr",
+            valetmodeenabled: "vehicle_state/valet_mode_enabled",
+            vehiclespeed: "drive_state/speed" // already aliased, included for completeness
         };
-
-        // DCChargingPower: "charge_state/dc_charging_power", // TODO: confirm correct mapping
-        // ACChargingPower: "charge_state/ac_charging_power", // TODO: confirm correct mapping
-
 
         const streamingKeyMap = {
             ...chargeState,
@@ -215,6 +229,8 @@ module.exports = function (RED) {
             return next.toLocaleTimeString();
         }
 
+
+        
         function extractValue(valueObj) {
             if (!valueObj || typeof valueObj !== 'object') return undefined;
             if ('doubleValue' in valueObj) return valueObj.doubleValue;
@@ -241,10 +257,100 @@ module.exports = function (RED) {
                         const parsed = JSON.parse(data);
                         if (Array.isArray(parsed.data)) {
                             parsed.data.forEach(item => {
-                                const key = item.key;
+                                const key = item.key.toLowerCase();
+                                // Handle compound streaming keys
+                                if (key === "location" && item.value?.locationValue) {
+                                    const { latitude, longitude } = item.value.locationValue;
+                                    node.send([{ topic: `${topicRoot}/${vehicleName}/drive_state/location`, payload: JSON.stringify({ latitude, longitude }) }, null]);
+                                    node.send([{ topic: `${topicRoot}/${vehicleName}/drive_state/latitude`, payload: convertUnits("drive_state/latitude", latitude) }, null]);
+                                    node.send([{ topic: `${topicRoot}/${vehicleName}/drive_state/longitude`, payload: convertUnits("drive_state/longitude", longitude) }, null]);
+                                    return;
+                                }
+
+                                if (key === "destinationlocation" && item.value?.locationValue) {
+                                    const { latitude, longitude } = item.value.locationValue;
+                                    node.send([{ topic: `${topicRoot}/${vehicleName}/drive_state/active_route_destination_location`, payload: JSON.stringify({ latitude, longitude }) }, null]);
+                                    node.send([{ topic: `${topicRoot}/${vehicleName}/drive_state/active_route_latitude`, payload: convertUnits("drive_state/active_route_latitude", latitude) }, null]);
+                                    node.send([{ topic: `${topicRoot}/${vehicleName}/drive_state/active_route_longitude`, payload: convertUnits("drive_state/active_route_longitude", longitude) }, null]);
+                                    return;
+                                }
+
+                                if (key === "doorstate" && item.value?.doorValue) {
+                                    const doors = item.value.doorValue;
+                                    node.send([{ topic: `${topicRoot}/${vehicleName}/vehicle_state/door_state`, payload: JSON.stringify(doors) }, null]);
+                                    Object.entries(doors).forEach(([door, state]) => {
+                                        const topic = `${topicRoot}/${vehicleName}/vehicle_state/door_state/${door.toLowerCase()}`;
+                                        node.send([{ topic, payload: state }, null]);
+                                    });
+                                    return;
+                                }
+
+                                if (key === "gear" && item.value?.shiftStateValue) {
+                                    const state = item.value.shiftStateValue.replace("ShiftState", "");
+                                    node.send([{ topic: `${topicRoot}/${vehicleName}/drive_state/shift_state`, payload: state }, null]);
+                                    return;
+                                }
+
+                                if (key === "hvacpower" && item.value?.hvacPowerValue) {
+                                    const state = item.value.hvacPowerValue.replace("HvacPowerState", "");
+                                    node.send([{ topic: `${topicRoot}/${vehicleName}/climate_state/hvac_power`, payload: state }, null]);
+                                    return;
+                                }
+
+                                if (key === "mediaplaybackstatus" && item.value?.mediaStatusValue) {
+                                    const state = item.value.mediaStatusValue.replace("MediaStatus", "");
+                                    node.send([{ topic: `${topicRoot}/${vehicleName}/vehicle_state/media_info/playback_status`, payload: state }, null]);
+                                    return;
+                                }
+
+                                const windowMap = {
+                                    fpwindow: "front_passenger",
+                                    fdwindow: "front_driver",
+                                    rdwindow: "rear_driver",
+                                    rpwindow: "rear_passenger"
+                                };
+                                if (key in windowMap && item.value?.windowStateValue) {
+                                    const state = item.value.windowStateValue.replace("WindowState", "");
+                                    node.send([{ topic: `${topicRoot}/${vehicleName}/vehicle_state/window_state/${windowMap[key]}`, payload: state }, null]);
+                                    return;
+                                }
+
+                                if (key === "defrostmode" && item.value?.defrostModeValue) {
+                                    const state = item.value.defrostModeValue.replace("DefrostModeState", "");
+                                    node.send([{ topic: `${topicRoot}/${vehicleName}/climate_state/defrost_mode`, payload: state }, null]);
+                                    return;
+                                }
+
+                                if (key === "cabinoverheatprotectionmode" && item.value?.cabinOverheatProtectionModeValue) {
+                                    const state = item.value.cabinOverheatProtectionModeValue.replace("CabinOverheatProtectionModeState", "");
+                                    node.send([{ topic: `${topicRoot}/${vehicleName}/climate_state/cabin_overheat_protection_mode`, payload: state }, null]);
+                                    return;
+                                }
+
+                                if (key === "cabinoverheatprotectiontemperaturelimit" && item.value?.cabinOverheatProtectionTemperatureLimitValue) {
+                                    const state = item.value.cabinOverheatProtectionTemperatureLimitValue.replace("ClimateOverheatProtectionTempLimit", "");
+                                    node.send([{ topic: `${topicRoot}/${vehicleName}/climate_state/cabin_overheat_protection_temp_limit`, payload: state }, null]);
+                                    return;
+                                }
+
+                                if (key === "scheduledchargingmode" && item.value?.scheduledChargingModeValue) {
+                                    const state = item.value.scheduledChargingModeValue.replace("ScheduledChargingMode", "");
+                                    node.send([{ topic: `${topicRoot}/${vehicleName}/charge_state/scheduled_charging_mode`, payload: state }, null]);
+                                    return;
+                                }
+
+                                if (key === "sentrymode" && item.value?.sentryModeStateValue) {
+                                    const state = item.value.sentryModeStateValue.replace("SentryModeState", "");
+                                    node.send([{ topic: `${topicRoot}/${vehicleName}/vehicle_state/sentry_mode`, payload: state }, null]);
+                                    return;
+                                }
+
                                 const val = extractValue(item.value);
                                 const mappedPath = streamingKeyMap[key];
                                 const topicPath = mappedPath || key;
+                                if (val === undefined && debug) {
+                                    node.log(`Streaming key ${key} had undefined value: ${JSON.stringify(item.value)}`);
+                                }
 
                                 const isSpecificallyWhitelisted = whitelist.some(w => topicPath === w);
                                 const isWhitelisted = whitelist.length === 0 || whitelist.some(w => topicPath.startsWith(w));
@@ -361,8 +467,16 @@ module.exports = function (RED) {
                             }
                         }
                         if (debug) node.send([null, { payload: data }]);
+                    
+                        if ("drive_state/latitude" in flattened && "drive_state/longitude" in flattened) {
+                            const lat = flattened["drive_state/latitude"];
+                            const lon = flattened["drive_state/longitude"];
+                            node.send([{
+                            topic: `${topicRoot}/${vehicleName}/drive_state/location`,
+                            payload: JSON.stringify({ latitude: lat, longitude: lon })
+                            }, null]);
+                        }
                     }
-
                     refreshHealthy = true;
                     isStarting = false;
                     updateStatus();
