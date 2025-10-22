@@ -249,7 +249,7 @@ module.exports = function (RED) {
             location: {
                 prop: "locationValue",
                 baseTopic: "drive_state/location",
-                subfields: false // special handling in websocket loop
+                subfields: true
             },
             destinationlocation: {
                 prop: "locationValue",
@@ -381,14 +381,6 @@ module.exports = function (RED) {
                                     }
                                 }
 
-                                if (key === "location" && item.value?.locationValue) { //special handling for location topics
-                                    const lat = item.value.locationValue.latitude;
-                                    const lon = item.value.locationValue.longitude;
-                                    node.send([{ topic: `${topicRoot}/${vehicleName}/drive_state/latitude`, payload: lat }, null]);
-                                    node.send([{ topic: `${topicRoot}/${vehicleName}/drive_state/longitude`, payload: lon }, null]);
-                                    return;
-                                }
-
                                 const val = extractValue(item.value);
                                 const mappedPath = streamingKeyMap[key];
                                 const topicPath = mappedPath || key;
@@ -517,7 +509,7 @@ module.exports = function (RED) {
                             const lon = flattened["drive_state/longitude"];
                             node.send([{
                             topic: `${topicRoot}/${vehicleName}/drive_state/location`,
-                            payload: { latitude: lat, longitude: lon }
+                            payload: JSON.stringify({ latitude: lat, longitude: lon })
                             }, null]);
                         }
                     }
