@@ -176,6 +176,88 @@ module.exports = function (RED) {
             ...misc
         };
 
+        const compoundEnumKeys = {
+            detailedchargestate: {
+                prop: "detailedChargeStateValue",
+                prefix: "DetailedChargeState",
+                topic: "charge_state/detailed_charge_state"
+            },
+            chargeportlatch: {
+                prop: "chargePortLatchValue",
+                prefix: "ChargePortLatch",
+                topic: "charge_state/charge_port_latch"
+            },
+            chargingcabletype: {
+                prop: "cableTypeValue",
+                prefix: "CableType",
+                topic: "charge_state/charging_cable_type"
+            },
+            climatekeepermode: {
+                prop: "climateKeeperModeValue",
+                prefix: "ClimateKeeperModeState",
+                topic: "climate_state/climate_keeper_mode"
+            },
+            cabinoverheatprotectionmode: {
+                prop: "cabinOverheatProtectionModeValue",
+                prefix: "CabinOverheatProtectionModeState",
+                topic: "climate_state/cabin_overheat_protection_mode"
+            },
+            cabinoverheatprotectiontemperaturelimit: {
+                prop: "cabinOverheatProtectionTemperatureLimitValue",
+                prefix: "ClimateOverheatProtectionTempLimit",
+                topic: "climate_state/cabin_overheat_protection_temp_limit"
+            },
+            defrostmode: {
+                prop: "defrostModeValue",
+                prefix: "DefrostModeState",
+                topic: "climate_state/defrost_mode"
+            },
+            gear: {
+                prop: "shiftStateValue",
+                prefix: "ShiftState",
+                topic: "drive_state/shift_state"
+            },
+            hvacpower: {
+                prop: "hvacPowerValue",
+                prefix: "HvacPowerState",
+                topic: "climate_state/hvac_power"
+            },
+            mediaplaybackstatus: {
+                prop: "mediaStatusValue",
+                prefix: "MediaStatus",
+                topic: "vehicle_state/media_info/playback_status"
+            },
+            scheduledchargingmode: {
+                prop: "scheduledChargingModeValue",
+                prefix: "ScheduledChargingMode",
+                topic: "charge_state/scheduled_charging_mode"
+            },
+            sentrymode: {
+                prop: "sentryModeStateValue",
+                prefix: "SentryModeState",
+                topic: "vehicle_state/sentry_mode"
+            }
+        };
+
+
+        const nestedObjectKeys = {
+            doorstate: {
+                prop: "doorValue",
+                baseTopic: "vehicle_state/door_state",
+                subfields: true
+            },
+            location: {
+                prop: "locationValue",
+                baseTopic: "drive_state/location",
+                subfields: true
+            },
+            destinationlocation: {
+                prop: "locationValue",
+                baseTopic: "drive_state/active_route_destination_location",
+                subfields: true
+            }
+        };
+
         let ws;
         let refreshTimer;
         let heartbeatTimer;
@@ -228,15 +310,16 @@ module.exports = function (RED) {
             const next = new Date(now.getTime() + refreshInterval * 1000);
             return next.toLocaleTimeString();
         }
-
-
         
         function extractValue(valueObj) {
             if (!valueObj || typeof valueObj !== 'object') return undefined;
+            if ('invalid' in valueObj && valueObj.invalid === true) return null;
             if ('doubleValue' in valueObj) return valueObj.doubleValue;
             if ('intValue' in valueObj) return valueObj.intValue;
+            if ('longValue' in valueObj) return parseInt(valueObj.longValue);
             if ('stringValue' in valueObj) return valueObj.stringValue;
             if ('boolValue' in valueObj) return valueObj.boolValue;
+            if ('booleanValue' in valueObj) return valueObj.booleanValue;
             if ('timestampValue' in valueObj) return valueObj.timestampValue;
             return undefined;
         }
@@ -258,49 +341,15 @@ module.exports = function (RED) {
                         if (Array.isArray(parsed.data)) {
                             parsed.data.forEach(item => {
                                 const key = item.key.toLowerCase();
-                                // Handle compound streaming keys
-                                if (key === "location" && item.value?.locationValue) {
-                                    const { latitude, longitude } = item.value.locationValue;
-                                    node.send([{ topic: `${topicRoot}/${vehicleName}/drive_state/location`, payload: JSON.stringify({ latitude, longitude }) }, null]);
-                                    node.send([{ topic: `${topicRoot}/${vehicleName}/drive_state/latitude`, payload: convertUnits("drive_state/latitude", latitude) }, null]);
-                                    node.send([{ topic: `${topicRoot}/${vehicleName}/drive_state/longitude`, payload: convertUnits("drive_state/longitude", longitude) }, null]);
-                                    return;
-                                }
 
-                                if (key === "destinationlocation" && item.value?.locationValue) {
-                                    const { latitude, longitude } = item.value.locationValue;
-                                    node.send([{ topic: `${topicRoot}/${vehicleName}/drive_state/active_route_destination_location`, payload: JSON.stringify({ latitude, longitude }) }, null]);
-                                    node.send([{ topic: `${topicRoot}/${vehicleName}/drive_state/active_route_latitude`, payload: convertUnits("drive_state/active_route_latitude", latitude) }, null]);
-                                    node.send([{ topic: `${topicRoot}/${vehicleName}/drive_state/active_route_longitude`, payload: convertUnits("drive_state/active_route_longitude", longitude) }, null]);
-                                    return;
-                                }
-
-                                if (key === "doorstate" && item.value?.doorValue) {
-                                    const doors = item.value.doorValue;
-                                    node.send([{ topic: `${topicRoot}/${vehicleName}/vehicle_state/door_state`, payload: JSON.stringify(doors) }, null]);
-                                    Object.entries(doors).forEach(([door, state]) => {
-                                        const topic = `${topicRoot}/${vehicleName}/vehicle_state/door_state/${door.toLowerCase()}`;
-                                        node.send([{ topic, payload: state }, null]);
-                                    });
-                                    return;
-                                }
-
-                                if (key === "gear" && item.value?.shiftStateValue) {
-                                    const state = item.value.shiftStateValue.replace("ShiftState", "");
-                                    node.send([{ topic: `${topicRoot}/${vehicleName}/drive_state/shift_state`, payload: state }, null]);
-                                    return;
-                                }
-
-                                if (key === "hvacpower" && item.value?.hvacPowerValue) {
-                                    const state = item.value.hvacPowerValue.replace("HvacPowerState", "");
-                                    node.send([{ topic: `${topicRoot}/${vehicleName}/climate_state/hvac_power`, payload: state }, null]);
-                                    return;
-                                }
-
-                                if (key === "mediaplaybackstatus" && item.value?.mediaStatusValue) {
-                                    const state = item.value.mediaStatusValue.replace("MediaStatus", "");
-                                    node.send([{ topic: `${topicRoot}/${vehicleName}/vehicle_state/media_info/playback_status`, payload: state }, null]);
-                                    return;
+                                if (compoundEnumKeys[key]) {
+                                    const { prop, prefix, topic } = compoundEnumKeys[key];
+                                    const raw = item.value?.[prop];
+                                    if (raw && raw.startsWith(prefix)) {
+                                        const state = raw.replace(prefix, "");
+                                        node.send([{ topic: `${topicRoot}/${vehicleName}/${topic}`, payload: state }, null]);
+                                        return;
+                                    }
                                 }
 
                                 const windowMap = {
@@ -315,34 +364,21 @@ module.exports = function (RED) {
                                     return;
                                 }
 
-                                if (key === "defrostmode" && item.value?.defrostModeValue) {
-                                    const state = item.value.defrostModeValue.replace("DefrostModeState", "");
-                                    node.send([{ topic: `${topicRoot}/${vehicleName}/climate_state/defrost_mode`, payload: state }, null]);
-                                    return;
-                                }
-
-                                if (key === "cabinoverheatprotectionmode" && item.value?.cabinOverheatProtectionModeValue) {
-                                    const state = item.value.cabinOverheatProtectionModeValue.replace("CabinOverheatProtectionModeState", "");
-                                    node.send([{ topic: `${topicRoot}/${vehicleName}/climate_state/cabin_overheat_protection_mode`, payload: state }, null]);
-                                    return;
-                                }
-
-                                if (key === "cabinoverheatprotectiontemperaturelimit" && item.value?.cabinOverheatProtectionTemperatureLimitValue) {
-                                    const state = item.value.cabinOverheatProtectionTemperatureLimitValue.replace("ClimateOverheatProtectionTempLimit", "");
-                                    node.send([{ topic: `${topicRoot}/${vehicleName}/climate_state/cabin_overheat_protection_temp_limit`, payload: state }, null]);
-                                    return;
-                                }
-
-                                if (key === "scheduledchargingmode" && item.value?.scheduledChargingModeValue) {
-                                    const state = item.value.scheduledChargingModeValue.replace("ScheduledChargingMode", "");
-                                    node.send([{ topic: `${topicRoot}/${vehicleName}/charge_state/scheduled_charging_mode`, payload: state }, null]);
-                                    return;
-                                }
-
-                                if (key === "sentrymode" && item.value?.sentryModeStateValue) {
-                                    const state = item.value.sentryModeStateValue.replace("SentryModeState", "");
-                                    node.send([{ topic: `${topicRoot}/${vehicleName}/vehicle_state/sentry_mode`, payload: state }, null]);
-                                    return;
+                                if (nestedObjectKeys[key]) {
+                                    const { prop, baseTopic, subfields } = nestedObjectKeys[key];
+                                    const nested = item.value?.[prop];
+                                    if (nested && typeof nested === "object") {
+                                        // Publish full object
+                                        node.send([{ topic: `${topicRoot}/${vehicleName}/${baseTopic}`, payload: JSON.stringify(nested) }, null]);
+                                        // Publish each subfield
+                                        if (subfields) {
+                                            Object.entries(nested).forEach(([subKey, subVal]) => {
+                                                const topic = `${topicRoot}/${vehicleName}/${baseTopic}/${subKey.toLowerCase()}`;
+                                                node.send([{ topic, payload: convertUnits(topic, subVal) }, null]);
+                                            });
+                                        }
+                                        return;
+                                    }
                                 }
 
                                 const val = extractValue(item.value);
