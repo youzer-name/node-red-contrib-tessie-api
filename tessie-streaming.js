@@ -373,6 +373,7 @@ module.exports = function (RED) {
                                     const lon = item.value.locationValue.longitude;
                                     node.send([{ topic: `${topicRoot}/${vehicleName}/drive_state/latitude`, payload: lat }, null]);
                                     node.send([{ topic: `${topicRoot}/${vehicleName}/drive_state/longitude`, payload: lon }, null]);
+                                    node.send([{ topic: `${topicRoot}/${vehicleName}/drive_state/location`, payload: { latitude: lat, longitude: lon } }, null]);
                                     return;
                                 }
 
