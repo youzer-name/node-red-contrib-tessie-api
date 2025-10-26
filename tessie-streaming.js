@@ -13,7 +13,25 @@ module.exports = function (RED) {
         let manualStop = false;
         let streamingHealthy = false;
         let refreshHealthy = false;
-        
+
+        let isVehicleAsleep = false;
+        let statusPollTimer = null;
+
+        let lastStreamingMessageTime = Date.now();
+        const INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+        let inactivityWatchdogTimer;
+        let reconnectAttempts = 0;
+        let reconnectInProgress = false;
+
+        function safeReconnect(reason = "unspecified") {
+            reconnectAttempts++;
+            const delay = Math.min(30000, 1000 * Math.pow(2, reconnectAttempts)); // max 30s
+            if (debug) node.log(`Reconnecting WebSocket in ${delay / 1000}s due to ${reason} (attempt ${reconnectAttempts})`);
+            setTimeout(() => {
+                connectWebSocket();
+            }, delay);
+        }
+
         const vehicleConfig = RED.nodes.getNode(config.vehicle);
         const serverConfig = RED.nodes.getNode(config.server);
         const streamConfig = RED.nodes.getNode(config.streamServer);
@@ -40,108 +58,119 @@ module.exports = function (RED) {
         //map streaming keys to REST API keys
         // NOTE: All keys in this map must be lowercase to ensure consistent lookup and filtering.
         const chargeState = {
+            acchargingpower: "charge_state/ac_charging_power",
+            batterycurrent: "charge_state/battery_current",
             batterylevel: "charge_state/battery_level",
-            soc: "charge_state/battery_level", // alias
-            ratedrange: "charge_state/battery_range",
-            idealbatteryrange: "charge_state/ideal_battery_range",
-            estbatteryrange: "charge_state/est_battery_range",
+            batteryvoltage: "charge_state/battery_voltage",
+            chargeamps: "charge_state/charge_amps",
+            chargecurrentrequest: "charge_state/charge_current_request",
+            chargecurrentrequestmax: "charge_state/charge_current_request_max",
             chargeenergyadded: "charge_state/charge_energy_added",
-            chargervoltage: "charge_state/charger_voltage",
-            chargerpower: "charge_state/charger_power",
-            chargerphases: "charge_state/charger_phases",
-            chargeractualcurrent: "charge_state/charger_actual_current",
+            chargeenablerequest: "charge_state/charge_enable_request",
             chargelimitsoc: "charge_state/charge_limit_soc",
+            chargeractualcurrent: "charge_state/charger_actual_current",
+            chargerphases: "charge_state/charger_phases",
+            chargerpower: "charge_state/charger_power",
+            chargervoltage: "charge_state/charger_voltage",
             chargeportdooropen: "charge_state/charge_port_door_open",
             chargeportlatch: "charge_state/charge_port_latch",
             chargingstate: "charge_state/charging_state",
-            ischarging: "charge_state/charging_state", // alias
-            timetofullcharge: "charge_state/time_to_full_charge",
+            energyremaining: "charge_state/energy_remaining",
+            estbatteryrange: "charge_state/est_battery_range",
             fastchargerpresent: "charge_state/fast_charger_present",
+            fastchargertype: "charge_state/fast_charger_type",
+            idealbatteryrange: "charge_state/ideal_battery_range",
+            ischarging: "charge_state/charging_state",
+            lifetimeenergyused: "charge_state/lifetime_energy_used",
+            moduletempmax: "charge_state/module_temp_max",
+            moduletempmin: "charge_state/module_temp_min",
+            packcurrent: "charge_state/pack_current",
+            packvoltage: "charge_state/pack_voltage",
+            ratedrange: "charge_state/battery_range",
             scheduledchargingpending: "charge_state/scheduled_charging_pending",
             scheduledchargingstarttime: "charge_state/scheduled_charging_start_time",
-            energyremaining: "charge_state/energy_remaining",
-            packvoltage: "charge_state/pack_voltage",
-            packcurrent: "charge_state/pack_current",
-            batterycurrent: "charge_state/battery_current",
-            batteryvoltage: "charge_state/battery_voltage",
-            moduletempmin: "charge_state/module_temp_min",
-            moduletempmax: "charge_state/module_temp_max",
-            lifetimeenergyused: "charge_state/lifetime_energy_used",
-            chargecurrentrequestmax: "charge_state/charge_current_request_max",
-            chargecurrentrequest: "charge_state/charge_current_request",
-            chargeamps: "charge_state/charge_amps"
+            soc: "charge_state/battery_level",
+            timetofullcharge: "charge_state/time_to_full_charge"
         };
 
         const driveState = {
-            speed: "drive_state/speed",
-            vehiclespeed: "drive_state/speed", // alias
-            power: "drive_state/power",
-            shiftstate: "drive_state/shift_state",
+            destinationname: "drive_state/active_route_destination",
+            expectedenergypercentattriparrival: "drive_state/active_route_energy_at_arrival",
+            gpsheading: "drive_state/heading",
             heading: "drive_state/heading",
-            gpsheading: "drive_state/heading", // alias
             latitude: "drive_state/latitude",
             longitude: "drive_state/longitude",
             milestoarrival: "drive_state/active_route_miles_to_arrival",
             minutestoarrival: "drive_state/active_route_minutes_to_arrival",
-            destinationname: "drive_state/active_route_destination",
-            expectedenergypercentattriparrival: "drive_state/active_route_energy_at_arrival"
+            power: "drive_state/power",
+            shiftstate: "drive_state/shift_state",
+            speed: "drive_state/speed",
+            vehiclespeed: "drive_state/speed"
         };
 
         const climateState = {
-            insidetemp: "climate_state/inside_temp",
-            outsidetemp: "climate_state/outside_temp",
-            drivertempsetting: "climate_state/driver_temp_setting",
-            passengertempsetting: "climate_state/passenger_temp_setting",
-            isautoconditioningon: "climate_state/is_auto_conditioning_on",
-            fanstatus: "climate_state/fan_status",
-            isfrontdefrosteron: "climate_state/is_front_defroster_on",
-            isreardefrosteron: "climate_state/is_rear_defroster_on",
             batteryheater: "climate_state/battery_heater",
-            batteryheateron: "climate_state/battery_heater_on",
             batteryheateractive: "climate_state/battery_heater_on",
-            isclimateon: "climate_state/is_climate_on",
-            ispreconditioning: "climate_state/is_preconditioning",
+            batteryheateron: "climate_state/battery_heater_on",
             cabinoverheatprotection: "climate_state/cabin_overheat_protection",
+            climateseatcoolingfrontleft: "climate_state/seat_heater_left",
+            climateseatcoolingfrontright: "climate_state/seat_heater_right",
+            drivertempsetting: "climate_state/driver_temp_setting",
+            fanstatus: "climate_state/fan_status",
+            hvaclefttemperaturerequest: "climate_state/driver_temp_setting",
             hvacsteeringwheelheatlevel: "climate_state/steering_wheel_heat_level",
-            climateseatcoolingfrontleft: "climate_state/seat_heater_left", 
-            climateseatcoolingfrontright: "climate_state/seat_heater_right", 
-            hvaclefttemperaturerequest: "climate_state/driver_temp_setting", 
+            insidetemp: "climate_state/inside_temp",
+            isautoconditioningon: "climate_state/is_auto_conditioning_on",
+            isclimateon: "climate_state/is_climate_on",
+            isfrontdefrosteron: "climate_state/is_front_defroster_on",
+            ispreconditioning: "climate_state/is_preconditioning",
+            isreardefrosteron: "climate_state/is_rear_defroster_on",
+            outsidetemp: "climate_state/outside_temp",
+            passengertempsetting: "climate_state/passenger_temp_setting",
             seatheaterleft: "climate_state/seat_heater_left",
             seatheaterright: "climate_state/seat_heater_right",
+            seatheaterrearcenter: "climate_state/seat_heater_rear_center",
             seatheaterrearleft: "climate_state/seat_heater_rear_left",
-            seatheaterrearright: "climate_state/seat_heater_rear_right",
-            seatheaterrearcenter: "climate_state/seat_heater_rear_center"
+            seatheaterrearright: "climate_state/seat_heater_rear_right"
         };
 
         const vehicleState = {
-            odometer: "vehicle_state/odometer",
-            isuserpresent: "vehicle_state/is_user_present",
-            isdriverpresent: "vehicle_state/is_driver_present",
-            isvehiclelocked: "vehicle_state/locked",
-            tpmspressurefrontleft: "vehicle_state/tpms_pressure_fl",
-            tpmspressurefrontright: "vehicle_state/tpms_pressure_fr",
-            tpmspressurerearleft: "vehicle_state/tpms_pressure_rl",
-            tpmspressurerearright: "vehicle_state/tpms_pressure_rr",
-            tpmspressurefl: "vehicle_state/tpms_pressure_fl",
-            tpmspressurefr: "vehicle_state/tpms_pressure_fr",
-            tpmspressurerl: "vehicle_state/tpms_pressure_rl",
-            tpmspressurerr: "vehicle_state/tpms_pressure_rr",
-            softwareupdateversion: "vehicle_state/software_update/version",
-            softwareupdatedownloadpercentcomplete: "vehicle_state/software_update/download_perc",
-            softwareupdateinstallationpercentcomplete: "vehicle_state/software_update/install_perc",
             currentlimitmph: "vehicle_state/speed_limit_mode/current_limit_mph",
-            vehiclename: "vehicle_state/vehicle_name",
-            version: "vehicle_state/car_version",
+            driverseatoccupied: "vehicle_state/driver_seat_occupied",
+            isdriverpresent: "vehicle_state/is_driver_present",
+            isuserpresent: "vehicle_state/is_user_present",
+            isvehiclelocked: "vehicle_state/locked",
+            locked: "vehicle_state/locked",
+            mediaaudiovolume: "vehicle_state/media_info/audio_volume",
+            mediaaudiovolumeincrement: "vehicle_state/media_info/audio_volume_increment",
             mediaaudiovolumemax: "vehicle_state/media_info/audio_volume_max",
             medianowplayingalbum: "vehicle_state/media_info/now_playing_album",
             medianowplayingartist: "vehicle_state/media_info/now_playing_artist",
-            medianowplayingtitle: "vehicle_state/media_info/now_playing_title",
-            medianowplayingstation: "vehicle_state/media_info/now_playing_station",
-            medianowplayingelapsed: "vehicle_state/media_info/now_playing_elapsed",
             medianowplayingduration: "vehicle_state/media_info/now_playing_duration",
+            medianowplayingelapsed: "vehicle_state/media_info/now_playing_elapsed",
+            medianowplayingstation: "vehicle_state/media_info/now_playing_station",
+            medianowplayingtitle: "vehicle_state/media_info/now_playing_title",
             mediaplaybacksource: "vehicle_state/media_info/now_playing_source",
-            mediaaudiovolume: "vehicle_state/media_info/audio_volume",
-            mediaaudiovolumeincrement: "vehicle_state/media_info/audio_volume_increment"
+            odometer: "vehicle_state/odometer",
+            softwareupdatedownloadpercentcomplete: "vehicle_state/software_update/download_perc",
+            softwareupdateinstallationpercentcomplete: "vehicle_state/software_update/install_perc",
+            softwareupdateversion: "vehicle_state/software_update/version",
+            speedlimitmode: "vehicle_state/speed_limit_mode/enabled",
+            tpmslastseenpressuretimefl: "vehicle_state/tpms_last_seen_pressure_time_fl",
+            tpmslastseenpressuretimefr: "vehicle_state/tpms_last_seen_pressure_time_fr",
+            tpmslastseenpressuretimerl: "vehicle_state/tpms_last_seen_pressure_time_rl",
+            tpmslastseenpressuretimerr: "vehicle_state/tpms_last_seen_pressure_time_rr",
+            tpmspressurefl: "vehicle_state/tpms_pressure_fl",
+            tpmspressurefr: "vehicle_state/tpms_pressure_fr",
+            tpmspressurefrontleft: "vehicle_state/tpms_pressure_fl",
+            tpmspressurefrontright: "vehicle_state/tpms_pressure_fr",
+            tpmspressurerl: "vehicle_state/tpms_pressure_rl",
+            tpmspressurerearleft: "vehicle_state/tpms_pressure_rl",
+            tpmspressurerr: "vehicle_state/tpms_pressure_rr",
+            tpmspressurerearright: "vehicle_state/tpms_pressure_rr",
+            valetmodeenabled: "vehicle_state/valet_mode_enabled",
+            vehiclename: "vehicle_state/vehicle_name",
+            version: "vehicle_state/car_version"
         };
 
         const vehicleConfigMap = {
@@ -149,22 +178,7 @@ module.exports = function (RED) {
         };
 
         const misc = {
-            timestamp: "timestamp",
-            acchargingpower: "charge_state/ac_charging_power",
-            batteryheateron: "climate_state/battery_heater_on",
-            chargeenablerequest: "charge_state/charge_enable_request",
-            chargeportdooropen: "charge_state/charge_port_door_open",
-            chargeportlatch: "charge_state/charge_port_latch",
-            driverseatoccupied: "vehicle_state/driver_seat_occupied",
-            fastchargertype: "charge_state/fast_charger_type",
-            locked: "vehicle_state/locked",
-            speedlimitmode: "vehicle_state/speed_limit_mode/enabled",
-            timetofullcharge: "charge_state/time_to_full_charge",
-            tpmslastseenpressuretimefl: "vehicle_state/tpms_last_seen_pressure_time_fl",
-            tpmslastseenpressuretimefr: "vehicle_state/tpms_last_seen_pressure_time_fr",
-            tpmslastseenpressuretimerr: "vehicle_state/tpms_last_seen_pressure_time_rr",
-            valetmodeenabled: "vehicle_state/valet_mode_enabled",
-            vehiclespeed: "drive_state/speed" // already aliased, included for completeness
+            timestamp: "timestamp"
         };
 
         const streamingKeyMap = {
@@ -267,19 +281,47 @@ module.exports = function (RED) {
                 node.status({ fill: "gray", shape: "ring", text: "Stopped" });
             } else if (isStarting) {
                 node.status({ fill: "yellow", shape: "ring", text: "Starting..." });
+            } else if (isVehicleAsleep) {
+                node.status({ fill: "blue", shape: "ring", text: "Vehicle asleep" });
             } else if (streamingHealthy && refreshHealthy) {
                 node.status({ fill: "green", shape: "dot", text: `Connected. Next refresh: ${nextRefreshTime()}` });
             } else {
                 const issues = [];
-                if (!streamingHealthy) issues.push("streaming");
+                if (!streamingHealthy && ws) issues.push("streaming");
                 if (!refreshHealthy) issues.push("refresh");
-                node.status({
-                    fill: "red",
-                    shape: "ring",
-                    text: `Error: ${issues.join(" & ")} failed. Next refresh: ${nextRefreshTime()}`
-                });
+                const fillColor = issues.length ? "red" : "yellow";
+                const shape = issues.length ? "ring" : "dot";
+                const text = issues.length
+                    ? `Error: ${issues.join(" & ")} failed. Next refresh: ${nextRefreshTime()}`
+                    : `Waiting for data... Next refresh: ${nextRefreshTime()}`;
+                node.status({ fill: fillColor, shape, text });
             }
         }
+
+
+        async function pollVehicleStatus() {
+            try {
+                const url = `${baseUrl}/${vin}/status`;
+                if (debug) node.log(`Polling vehicle status from: ${url}`);
+                const res = await axios.get(url, {
+                    headers: { Authorization: `Bearer ${queryToken}` },
+                    timeout: 10000
+                });
+                const status = res.data?.status;
+                if (debug) node.log(`Vehicle status: ${status}`);
+
+                if (status === "awake" && isVehicleAsleep) {
+                    isVehicleAsleep = false;
+                    if (statusPollTimer) clearInterval(statusPollTimer);
+                    if (debug) node.log("Vehicle woke up — reconnecting WebSocket and restarting watchdog");
+                    connectWebSocket();
+                }
+            } catch (err) {
+                node.error("Error polling vehicle status: " + err.message);
+            }
+        }
+
+
 
         function flattenObject(obj, prefix = "") {
             const result = {};
@@ -299,8 +341,8 @@ module.exports = function (RED) {
         function convertUnits(key, val) {
             const normalizedKey = key.toLowerCase();
             if (units === "imperial") {
-               if (normalizedKey.includes("pressure") || normalizedKey.includes("tire")) {
-                   return val * 14.5038; // bar to PSI
+                if (normalizedKey.includes("pressure") || normalizedKey.includes("tire")) {
+                    return val * 14.5038; // bar to PSI
                 }
                 if (normalizedKey.includes("speed")) return val * 0.621371;
                 if (normalizedKey.includes("temp")) return (val * 9 / 5) + 32;
@@ -314,7 +356,7 @@ module.exports = function (RED) {
             const next = new Date(now.getTime() + refreshInterval * 1000);
             return next.toLocaleTimeString();
         }
-        
+
         function extractValue(valueObj) {
             if (!valueObj || typeof valueObj !== 'object') return undefined;
             if ('invalid' in valueObj && valueObj.invalid === true) return null;
@@ -329,128 +371,165 @@ module.exports = function (RED) {
         }
 
         function connectWebSocket() {
+            if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+                if (debug) node.log("WebSocket already open or connecting — skipping new connection.");
+                return;
+            }
+
             if (!isRunning) return;
             const url = `${streamBaseURL}/${vin}?access_token=${streamToken}`;
             ws = new WebSocket(url);
 
             ws.on('open', () => {
+                isVehicleAsleep = false;
                 streamingHealthy = true;
+                lastStreamingMessageTime = Date.now();
+                reconnectAttempts = 0;
+                reconnectInProgress = false;
                 updateStatus();
                 if (debug) node.log("WebSocket connected");
+                inactivityWatchdogTimer = setInterval(() => {
+                    if (!isRunning || !ws || ws.readyState !== WebSocket.OPEN) return;
+
+                    const now = Date.now();
+                    if (now - lastStreamingMessageTime > INACTIVITY_TIMEOUT_MS) {
+                        if (!reconnectInProgress) {
+                            reconnectInProgress = true;
+                            node.warn("Streaming inactivity detected — assuming vehicle is asleep.");
+                            isVehicleAsleep = true;
+                            ws.terminate(); // force close
+                            if (inactivityWatchdogTimer) clearInterval(inactivityWatchdogTimer);
+                            statusPollTimer = setInterval(pollVehicleStatus, 60000);
+                        }
+                    }
+                }, 60000); // check every minute
+
             });
 
             ws.on('message', (data) => {
                 try {
-                        const parsed = JSON.parse(data);
-                        if (Array.isArray(parsed.data)) {
-                            parsed.data.forEach(item => {
-                                const key = item.key.toLowerCase();
+                    const parsed = JSON.parse(data);
 
-                                if (compoundEnumKeys[key]) {
-                                    const { prop, prefix, topic } = compoundEnumKeys[key];
-                                    const raw = item.value?.[prop];
-                                    if (raw && raw.startsWith(prefix)) {
-                                        const state = raw.replace(prefix, "");
-                                        node.send([{ topic: `${topicRoot}/${vehicleName}/${topic}`, payload: state }, null]);
-                                        return;
-                                    }
-                                }
+                    lastStreamingMessageTime = Date.now();
 
-                                const windowMap = {
-                                    fpwindow: "front_passenger",
-                                    fdwindow: "front_driver",
-                                    rdwindow: "rear_driver",
-                                    rpwindow: "rear_passenger"
-                                };
-                                if (key in windowMap && item.value?.windowStateValue) {
-                                    const state = item.value.windowStateValue.replace("WindowState", "");
-                                    node.send([{ topic: `${topicRoot}/${vehicleName}/vehicle_state/window_state/${windowMap[key]}`, payload: state }, null]);
+                    if (Array.isArray(parsed.data)) {
+                        parsed.data.forEach(item => {
+                            const key = item.key.toLowerCase();
+
+                            if (compoundEnumKeys[key]) {
+                                const { prop, prefix, topic } = compoundEnumKeys[key];
+                                const raw = item.value?.[prop];
+                                if (raw && raw.startsWith(prefix)) {
+                                    const state = raw.replace(prefix, "");
+                                    node.send([{ topic: `${topicRoot}/${vehicleName}/${topic}`, payload: state }, null]);
                                     return;
                                 }
+                            }
 
-                                if (key === "location" && item.value?.locationValue) { //special handling for location topics
-                                    const lat = item.value.locationValue.latitude;
-                                    const lon = item.value.locationValue.longitude;
-                                    node.send([{ topic: `${topicRoot}/${vehicleName}/drive_state/latitude`, payload: lat }, null]);
-                                    node.send([{ topic: `${topicRoot}/${vehicleName}/drive_state/longitude`, payload: lon }, null]);
-                                    node.send([{ topic: `${topicRoot}/${vehicleName}/drive_state/location`, payload: { latitude: lat, longitude: lon } }, null]);
+                            const windowMap = {
+                                fpwindow: "front_passenger",
+                                fdwindow: "front_driver",
+                                rdwindow: "rear_driver",
+                                rpwindow: "rear_passenger"
+                            };
+                            if (key in windowMap && item.value?.windowStateValue) {
+                                const state = item.value.windowStateValue.replace("WindowState", "");
+                                node.send([{ topic: `${topicRoot}/${vehicleName}/vehicle_state/window_state/${windowMap[key]}`, payload: state }, null]);
+                                return;
+                            }
+
+                            if (key === "location" && item.value?.locationValue) { //special handling for location topics
+                                const lat = item.value.locationValue.latitude;
+                                const lon = item.value.locationValue.longitude;
+                                node.send([{ topic: `${topicRoot}/${vehicleName}/drive_state/latitude`, payload: lat }, null]);
+                                node.send([{ topic: `${topicRoot}/${vehicleName}/drive_state/longitude`, payload: lon }, null]);
+                                node.send([{ topic: `${topicRoot}/${vehicleName}/drive_state/location`, payload: { latitude: lat, longitude: lon } }, null]);
+                                return;
+                            }
+
+                            if (nestedObjectKeys[key]) {
+                                const { prop, baseTopic, subfields } = nestedObjectKeys[key];
+                                const nested = item.value?.[prop];
+                                if (nested && typeof nested === "object") {
+                                    // Publish full object
+                                    node.send([{ topic: `${topicRoot}/${vehicleName}/${baseTopic}`, payload: nested }, null]);
+                                    // Publish each subfield
+                                    if (subfields) {
+                                        Object.entries(nested).forEach(([subKey, subVal]) => {
+                                            const topic = `${topicRoot}/${vehicleName}/${baseTopic}/${subKey.toLowerCase()}`;
+                                            node.send([{ topic, payload: convertUnits(topic, subVal) }, null]);
+                                        });
+                                    }
                                     return;
                                 }
+                            }
 
-                                if (nestedObjectKeys[key]) {
-                                    const { prop, baseTopic, subfields } = nestedObjectKeys[key];
-                                    const nested = item.value?.[prop];
-                                    if (nested && typeof nested === "object") {
-                                        // Publish full object
-                                        node.send([{ topic: `${topicRoot}/${vehicleName}/${baseTopic}`, payload: nested }, null]);
-                                        // Publish each subfield
-                                        if (subfields) {
-                                            Object.entries(nested).forEach(([subKey, subVal]) => {
-                                                const topic = `${topicRoot}/${vehicleName}/${baseTopic}/${subKey.toLowerCase()}`;
-                                                node.send([{ topic, payload: convertUnits(topic, subVal) }, null]);
-                                            });
-                                        }
-                                        return;
-                                    }
-                                }
+                            const val = extractValue(item.value);
+                            const mappedPath = streamingKeyMap[key];
+                            const topicPath = mappedPath || key;
+                            if (val === undefined && debug) {
+                                node.log(`Streaming key ${key} had undefined value: ${JSON.stringify(item.value)}`);
+                            }
 
-                                const val = extractValue(item.value);
-                                const mappedPath = streamingKeyMap[key];
-                                const topicPath = mappedPath || key;
-                                if (val === undefined && debug) {
-                                    node.log(`Streaming key ${key} had undefined value: ${JSON.stringify(item.value)}`);
-                                }
+                            const isSpecificallyWhitelisted = whitelist.some(w => topicPath === w);
+                            const isWhitelisted = whitelist.length === 0 || whitelist.some(w => topicPath.startsWith(w));
+                            const isBlacklisted = blacklist.some(b => topicPath.startsWith(b));
 
-                                const isSpecificallyWhitelisted = whitelist.some(w => topicPath === w);
-                                const isWhitelisted = whitelist.length === 0 || whitelist.some(w => topicPath.startsWith(w));
-                                const isBlacklisted = blacklist.some(b => topicPath.startsWith(b));
-
-                                if (val !== undefined && (isSpecificallyWhitelisted || (isWhitelisted && !isBlacklisted))) {
+                            if (val !== undefined && (isSpecificallyWhitelisted || (isWhitelisted && !isBlacklisted))) {
+                                if (mappedPath) {
                                     const msgOut = {
                                         topic: `${topicRoot}/${vehicleName}/${topicPath}`,
                                         payload: convertUnits(topicPath, val)
                                     };
                                     node.send([msgOut, null]);
+                                }
 
-                                    if (!mappedPath && debug) {
+                                if (!mappedPath) {
+                                    const unmappedTopic = `${topicRoot}/${vehicleName}/unmapped/${key}`;
+                                    node.send([{ topic: unmappedTopic, payload: val }, null]);
+                                    if (debug) {
                                         node.log(`Unmapped streaming key: ${key} → using fallback topic`);
                                         node.send([null, { payload: `Unmapped streaming key: ${key} → using fallback topic` }]);
                                     }
                                 }
-                            });
-                            if (debug) node.send([null, { payload: parsed }]);
-                        } else if (parsed.alerts) {
-                            const msgOut = {
-                                topic: `${topicRoot}/${vehicleName}/alerts`,
-                                payload: JSON.stringify(parsed)
-                            };
-                            node.send([msgOut, null]);
-                        } else if (parsed.connectionId){
-                            const msgOut = {
-                                topic: `${topicRoot}/${vehicleName}/connectivity`,
-                                payload: JSON.stringify(parsed)
-                            };
-                            node.send([msgOut, null]);
-                        } else {
-                            //node.warn("WebSocket message received but 'data' is not an array.");
-                            if (debug) {
-                                node.log("Unexpected WebSocket payload: " + JSON.stringify(parsed));
                             }
+                        });
+                        if (debug) node.send([null, { payload: parsed }]);
+                    } else if (parsed.alerts) {
+                        const msgOut = {
+                            topic: `${topicRoot}/${vehicleName}/alerts`,
+                            payload: JSON.stringify(parsed)
+                        };
+                        node.send([msgOut, null]);
+                    } else if (parsed.connectionId) {
+                        const msgOut = {
+                            topic: `${topicRoot}/${vehicleName}/connectivity`,
+                            payload: JSON.stringify(parsed)
+                        };
+                        node.send([msgOut, null]);
+                    } else {
+                        //node.warn("WebSocket message received but 'data' is not an array.");
+                        if (debug) {
+                            node.log("Unexpected WebSocket payload: " + JSON.stringify(parsed));
                         }
-                    } catch (err) {
+                    }
+                } catch (err) {
                     node.error("Error parsing WebSocket message: " + err.message);
                 }
             });
 
             ws.on('close', () => {
                 streamingHealthy = false;
+                if (inactivityWatchdogTimer) clearInterval(inactivityWatchdogTimer);
                 if (manualStop) {
                     node.status({ fill: "gray", shape: "ring", text: "Stopped" });
                     manualStop = false;
                 } else {
                     if (!isStarting) updateStatus();
-                    if (debug) node.log("WebSocket disconnected. Reconnecting...");
-                    setTimeout(connectWebSocket, 5000);
+                    if (!reconnectInProgress && !isVehicleAsleep) {
+                        if (debug) node.log("WebSocket disconnected. Reconnecting...");
+                        safeReconnect("socket close");
+                    }
                 }
             });
 
@@ -465,13 +544,13 @@ module.exports = function (RED) {
             if (debug) node.log("startPeriodicRefresh() called");
             if (!isRunning) return;
 
-                if (refreshInterval === 0) {
-                    if (debug) node.log("Periodic refresh disabled (interval set to 0)");
-                    refreshHealthy = true; // assume healthy since it's intentionally disabled
-                    updateStatus();
-                    return;
-                }                    
-                async function doRefresh() {
+            if (refreshInterval === 0) {
+                if (debug) node.log("Periodic refresh disabled (interval set to 0)");
+                refreshHealthy = true; // assume healthy since it's intentionally disabled
+                updateStatus();
+                return;
+            }
+            async function doRefresh() {
                 try {
                     const url = `${baseUrl}/${vin}/state`;
                     if (debug) node.log(`Requesting vehicle state from: ${url}`);
@@ -480,6 +559,20 @@ module.exports = function (RED) {
                         timeout: 10000
                     });
                     const data = res.data;
+
+                    if (data?.status === "asleep") {
+                        if (!isVehicleAsleep) {
+                            isVehicleAsleep = true;
+                            if (debug) node.log("Vehicle reported asleep via REST — pausing refresh and streaming");
+                            if (refreshTimer) clearInterval(refreshTimer);
+                            if (inactivityWatchdogTimer) clearInterval(inactivityWatchdogTimer);
+                            if (ws && ws.readyState === WebSocket.OPEN) ws.terminate();
+                            statusPollTimer = setInterval(pollVehicleStatus, 60000);
+                            updateStatus();
+                        }
+                        return; // skip processing stale data
+                    }
+
                     const flattened = flattenObject(data);
                     const topicPrefix = topicRoot;
 
@@ -517,33 +610,45 @@ module.exports = function (RED) {
                             }
                         }
                         if (debug) node.send([null, { payload: data }]);
-                    
+
                         if ("drive_state/latitude" in flattened && "drive_state/longitude" in flattened) {
                             const lat = flattened["drive_state/latitude"];
                             const lon = flattened["drive_state/longitude"];
                             node.send([{
-                            topic: `${topicRoot}/${vehicleName}/drive_state/location`,
-                            payload: { latitude: lat, longitude: lon }
+                                topic: `${topicRoot}/${vehicleName}/drive_state/location`,
+                                payload: { latitude: lat, longitude: lon }
                             }, null]);
                         }
                     }
                     refreshHealthy = true;
                     isStarting = false;
+
+                    // After first refresh, decide whether to start streaming or sleep polling
+                    if ("state" in data && data.state === "asleep") {
+                        isVehicleAsleep = true;
+                        if (debug) node.log("Vehicle reported asleep on startup — skipping WebSocket and starting status polling");
+                        if (ws && ws.readyState === WebSocket.OPEN) ws.terminate();
+                        statusPollTimer = setInterval(pollVehicleStatus, 60000);
+                    } else {
+                        connectWebSocket();
+                    }
+
                     updateStatus();
+
                 } catch (err) {
                     refreshHealthy = false;
                     updateStatus();
                     node.error("Periodic refresh failed: " + (err?.message || err));
                     if (debug) node.log("Full error object: " + JSON.stringify(err, Object.getOwnPropertyNames(err)));
-                    }
                 }
-
-                // Run once immediately
-                doRefresh();
-
-                // Then on interval
-                refreshTimer = setInterval(doRefresh, refreshInterval * 1000);
             }
+
+            // Run once immediately
+            doRefresh();
+
+            // Then on interval
+            refreshTimer = setInterval(doRefresh, refreshInterval * 1000);
+        }
 
 
         function startHeartbeat() {
@@ -563,6 +668,7 @@ module.exports = function (RED) {
                 isRunning = false;
                 manualStop = true;
                 if (ws) ws.close();
+                if (inactivityWatchdogTimer) clearInterval(inactivityWatchdogTimer);
                 if (refreshTimer) clearInterval(refreshTimer);
                 if (heartbeatTimer) clearInterval(heartbeatTimer);
                 updateStatus();
@@ -573,10 +679,9 @@ module.exports = function (RED) {
                 if (!isRunning) {
                     isRunning = true;
                     isStarting = true;
-                    connectWebSocket();
                     startPeriodicRefresh();
                     startHeartbeat();
-                    updateStatus();
+
                     if (debug) node.log("Streaming started");
                 }
             }
@@ -585,7 +690,6 @@ module.exports = function (RED) {
         if (autoStart) {
             isRunning = true;
             isStarting = true;
-            connectWebSocket();
             startPeriodicRefresh();
             startHeartbeat();
             updateStatus();
@@ -595,6 +699,7 @@ module.exports = function (RED) {
         node.on('close', () => {
             isRunning = false;
             if (ws) ws.close();
+            if (inactivityWatchdogTimer) clearInterval(inactivityWatchdogTimer);
             if (refreshTimer) clearInterval(refreshTimer);
             if (heartbeatTimer) clearInterval(heartbeatTimer);
             updateStatus();
