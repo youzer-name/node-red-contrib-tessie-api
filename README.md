@@ -36,7 +36,7 @@ To use the tessie-energy-command node:
  - Any additional fields that are required or available will be displayed
 
 ## Tessie Streaming Node
-The `tessie-streaming` node connects to the Tessie WebSocket API for real-time streaming data and periodically polls the REST API for full vehicle state data.  It is intended to format the data for output to an MQTT-out node to share the data with subscribers via an MQTT server.
+The `tessie-streaming` node connects to the Tessie WebSocket API for real-time streaming data and periodically polls the REST API for full vehicle state data.  It is intended to format the data for output to an MQTT-out node to share the data with subscribers via an MQTT server.  When started, the node will do an inital full data refresh via the REST API.  If the vehicle is awake, it will then open the websocket connection for streaming data.  While the vehicle is awake, it will also do a full REST API refresh on the user-configured interval.  If the vehicle is asleep or goes to sleep, it will close the websocket and begin checking the vehicle state every minute until the vehicle is awake again.  
 
 ### Features
 
@@ -61,19 +61,25 @@ If you do not check the 'Auto-start on deploy' option, the node will not do anyt
 - **Output 1**: Parsed vehicle data with topic and payload for sending via MQTT
 - **Output 2**: Debug data (if debug mode is enabled)
 
+The msg.topic output by the node always takes the form of {root_topic}/{vehicle_name}/{key}.  The root topic is set in the node config.  The vehicle name comes from the name the user set in the Tessie Vehicle Config node.
+
+The node attempts to map the data from the streaming format to the format used in the periodic REST API return.  For example, the streaming API returns "Soc" for the state of charge.  The REST API returns that data in charge_state.battery_level which is output from the node with topic charge_sate/battery_level.  The node converts all streaming keys to lower case then checks its map for a match, in this case soc is mapped to charge_state/battery_level.  So whether the state of charge is received from the websocket streaming or the REST API refresh, it will always be output under the topic charge_state/battery_level.  All unmapped keys are output under the topic "unmapped/{key}"
+
+The node also outputs a heartbeat message every 60 seconds with the topic {root_topic}/{vehicle_name}/heartbeat.
+
 ### Configuration
 
 To use the streaming node you must have at least one vehicle and two servers configured.  Currently the server Base URLs should be set to https://api.tessie.com and wss://streaming.tessie.com.
-- **Vehicle**: Create or select a vehicle config.  The name configured for this vehicle will be used as the second element of the MQTT topic, after Topic Root.
+- **Vehicle**: Create or select a vehicle config.  The name configured for this vehicle will be used as the second element of the MQTT topic, after Topic Root
 - **Server**: Create or select the Tessie API server config
 - **Stream Server**: Create or select the Tessie websocket streaming server config
 - **Topic Root**: Base topic prefix for output messages
   - So if you set you Topic Root to "tessie_api" and select a vehicle named "MyModel3", the topic for all messages sent by the node will start with "tessie_api/MyModel3/"
-- **Refresh Interval**: Polling interval in seconds for REST API.  Set to 0 to disable periodic refresh.
-- **Units**: Metric or Imperial
+- **Refresh Interval**: Polling interval in seconds for REST API.  Set to 0 to disable periodic refresh
+- **Units**: Metric or Imperial.  The node attempts to convert any key containing 'pressue', 'speed', 'temp', 'range', or 'odometer' to Imperial units if Imperial is selected
 - **Whitelist/Blacklist**: Filter keys to include/exclude from the output
 - **Group Output**: Send periodic data as one grouped message
-- **Debug**: Enable verbose logging and raw output
+- **Debug**: Enable console logging and raw output.  When debug is enabled, logs are written to the Node Red logs and the raw streaming or API messages are sent to output 2
 - **Auto Start**: Begin streaming on deploy
 
 ### Status Indicators
@@ -82,6 +88,7 @@ To use the streaming node you must have at least one vehicle and two servers con
 - 🟡 **Yellow**: Starting up
 - 🔴 **Red**: Error in streaming or refresh
 - ⚪ **Gray**: Stopped or idle
+- 🔵 **Blue**: Vehicle is asleep
 
 ## Whitelist and Blacklist Filtering Logic
 
