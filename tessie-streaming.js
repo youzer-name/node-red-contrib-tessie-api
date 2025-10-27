@@ -282,7 +282,8 @@ module.exports = function (RED) {
             } else if (isStarting) {
                 node.status({ fill: "yellow", shape: "ring", text: "Starting..." });
             } else if (isVehicleAsleep) {
-                node.status({ fill: "blue", shape: "ring", text: "Vehicle asleep" });
+                let timeString = new Date(lastStreamingMessageTime).toLocaleString();
+                node.status({ fill: "blue", shape: "ring", text: `Vehicle asleep. Last message: ${timeString}` });
             } else if (streamingHealthy && refreshHealthy) {
                 node.status({ fill: "green", shape: "dot", text: `Connected. Next refresh: ${nextRefreshTime()}` });
             } else {
@@ -318,6 +319,7 @@ module.exports = function (RED) {
                 }
             } catch (err) {
                 node.error("Error polling vehicle status: " + err.message);
+                node.status({ fill: "orange", shape: "ring", text: "Status poll failed" });
             }
         }
 
@@ -628,7 +630,9 @@ module.exports = function (RED) {
                         isVehicleAsleep = true;
                         if (debug) node.log("Vehicle reported asleep on startup — skipping WebSocket and starting status polling");
                         if (ws && ws.readyState === WebSocket.OPEN) ws.terminate();
-                        statusPollTimer = setInterval(pollVehicleStatus, 60000);
+                        if (!statusPollTimer) {
+                            statusPollTimer = setInterval(pollVehicleStatus, 60000);
+                        }
                     } else {
                         connectWebSocket();
                     }
@@ -656,7 +660,9 @@ module.exports = function (RED) {
                 if (isRunning) {
                     node.send([{
                         topic: `${topicRoot}/${vehicleName}/heartbeat`,
-                        payload: new Date().toISOString()
+                        payload: {
+                            last_message: lastStreamingMessageTime
+                        }
                     }, null]);
                 }
             }, 60000);
@@ -698,11 +704,11 @@ module.exports = function (RED) {
 
         node.on('close', () => {
             isRunning = false;
-            if (ws) ws.close();
+            if (ws) ws.terminate();
             if (inactivityWatchdogTimer) clearInterval(inactivityWatchdogTimer);
             if (refreshTimer) clearInterval(refreshTimer);
             if (heartbeatTimer) clearInterval(heartbeatTimer);
-            updateStatus();
+            if (statusPollTimer) clearInterval(statusPollTimer);
         });
     }
 
