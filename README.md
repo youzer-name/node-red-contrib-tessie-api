@@ -76,7 +76,7 @@ To use the streaming node you must have at least one vehicle and two servers con
 - **Topic Root**: Base topic prefix for output messages
   - So if you set you Topic Root to "tessie_api" and select a vehicle named "MyModel3", the topic for all messages sent by the node will start with "tessie_api/MyModel3/"
 - **Refresh Interval**: Polling interval in seconds for REST API.  Set to 0 to disable periodic refresh
-- **Units**: Metric or Imperial.  The node attempts to convert any key containing 'pressue', 'speed', 'temp', 'range', or 'odometer' to Imperial units if Imperial is selected
+- **Units**: Metric or Imperial.  The node attempts to convert pressure and temp values from psi/°F from bar/°C if Imperial is selected
 - **Whitelist/Blacklist**: Filter keys to include/exclude from the output
 - **Group Output**: Send periodic data as one grouped message
 - **Debug**: Enable console logging and raw output.  When debug is enabled, logs are written to the Node Red logs and the raw streaming or API messages are sent to output 2
