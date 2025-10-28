@@ -81,8 +81,8 @@
     <div class="form-row">
         <label for="node-input-units"><i class="fa fa-balance-scale"></i> Units</label>
         <select id="node-input-units">
-            <option value="metric">Metric (°C, km/h)</option>
-            <option value="imperial">Imperial (°F, mph)</option>
+            <option value="metric">Metric (°C, bar)</option>
+            <option value="imperial">Imperial (°F, psi)</option>
         </select>
     </div>
     <div class="form-row">
@@ -133,7 +133,7 @@
         <li><strong>Stream Server</strong>: Tessie streaming server configuration (WebSocket token and URL).</li>
         <li><strong>Topic Root</strong>: Base MQTT topic prefix for output messages.</li>
         <li><strong>Refresh Interval</strong>: How often (in seconds) to poll the REST API for full vehicle state.  Set to 0 to disable</li>
-        <li><strong>Units</strong>: Choose between metric or imperial units for speed, distance, and temperature.</li>
+        <li><strong>Units</strong>: Choose between metric or imperial units for pressure and temperature.</li>
         <li><strong>Whitelist/Blacklist</strong>: Optional filters to include or exclude specific data keys in the output.</li>
         <li><strong>Group Output</strong>: If enabled, periodic refresh data is sent as a single grouped message.</li>
         <li><strong>Debug</strong>: Enables verbose logging and sends raw data to the debug output.</li>
