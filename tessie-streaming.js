@@ -22,15 +22,9 @@ module.exports = function (RED) {
         let inactivityWatchdogTimer;
         let reconnectAttempts = 0;
         let reconnectInProgress = false;
-
-        function safeReconnect(reason = "unspecified") {
-            reconnectAttempts++;
-            const delay = Math.min(30000, 1000 * Math.pow(2, reconnectAttempts)); // max 30s
-            if (debug) node.log(`Reconnecting WebSocket in ${delay / 1000}s due to ${reason} (attempt ${reconnectAttempts})`);
-            setTimeout(() => {
-                connectWebSocket();
-            }, delay);
-        }
+        let ws;
+        let refreshTimer;
+        let heartbeatTimer;
 
         const vehicleConfig = RED.nodes.getNode(config.vehicle);
         const serverConfig = RED.nodes.getNode(config.server);
@@ -54,11 +48,10 @@ module.exports = function (RED) {
         const blacklist = (config.blacklist || "").split(",").map(s => s.trim()).filter(Boolean);
 
 
-
         //map streaming keys to REST API keys
         // NOTE: All keys in this map must be lowercase to ensure consistent lookup and filtering.
         const chargeState = {
-            acchargingpower: "charge_state/ac_charging_power",
+            acchargingpower: "charge_state/ac_charging_power", //key does not exist in REST API
             batterycurrent: "charge_state/battery_current",
             batterylevel: "charge_state/battery_level",
             batteryvoltage: "charge_state/battery_voltage",
@@ -75,12 +68,13 @@ module.exports = function (RED) {
             chargeportdooropen: "charge_state/charge_port_door_open",
             chargeportlatch: "charge_state/charge_port_latch",
             chargingstate: "charge_state/charging_state",
+            dcchargingpower: "charge_state/dc_charging_power", //key does not exist in REST API
             energyremaining: "charge_state/energy_remaining",
             estbatteryrange: "charge_state/est_battery_range",
             fastchargerpresent: "charge_state/fast_charger_present",
             fastchargertype: "charge_state/fast_charger_type",
             idealbatteryrange: "charge_state/ideal_battery_range",
-            ischarging: "charge_state/charging_state",
+            ischarging: "charge_state/is_charging", //key does not exist in REST API
             lifetimeenergyused: "charge_state/lifetime_energy_used",
             moduletempmax: "charge_state/module_temp_max",
             moduletempmin: "charge_state/module_temp_min",
@@ -137,6 +131,7 @@ module.exports = function (RED) {
         const vehicleState = {
             currentlimitmph: "vehicle_state/speed_limit_mode/current_limit_mph",
             driverseatoccupied: "vehicle_state/driver_seat_occupied",
+            homelinknearby: "vehicle_state/homelink_nearby",
             isdriverpresent: "vehicle_state/is_driver_present",
             isuserpresent: "vehicle_state/is_user_present",
             isvehiclelocked: "vehicle_state/locked",
@@ -152,8 +147,9 @@ module.exports = function (RED) {
             medianowplayingtitle: "vehicle_state/media_info/now_playing_title",
             mediaplaybacksource: "vehicle_state/media_info/now_playing_source",
             odometer: "vehicle_state/odometer",
-            softwareupdatedownloadpercentcomplete: "vehicle_state/software_update/download_perc",
-            softwareupdateinstallationpercentcomplete: "vehicle_state/software_update/install_perc",
+            softwareupdatedownloadpercentcomplete: "vehicle_state/software_update/download_percent",
+            softwareupdateinstallationpercentcomplete: "vehicle_state/software_update/install_percent",
+            softwareupdatescheduledstarttime: "vehicle_state/software_update/start_time", //key does not exist in REST API
             softwareupdateversion: "vehicle_state/software_update/version",
             speedlimitmode: "vehicle_state/speed_limit_mode/enabled",
             tpmslastseenpressuretimefl: "vehicle_state/tpms_last_seen_pressure_time_fl",
@@ -272,55 +268,36 @@ module.exports = function (RED) {
             }
         };
 
-        let ws;
-        let refreshTimer;
-        let heartbeatTimer;
 
-        async function initialSleepCheck() {
-            try {
-                const statusUrl = `${baseUrl}/${vin}/status`;
-                if (debug) node.log(`Initial sleep check from: ${statusUrl}`);
-                const statusRes = await axios.get(statusUrl, {
-                    headers: { Authorization: `Bearer ${queryToken}` },
-                    timeout: 10000
+
+        const api = axios.create({
+            baseURL: baseUrl,
+            timeout: 10000,
+            headers: { Authorization: `Bearer ${queryToken}` }
+        });
+
+        function clearTimers() {
+            [inactivityWatchdogTimer, refreshTimer, statusPollTimer] // don't clear heartbeat timer
+                .forEach(timer => {
+                    if (timer) clearInterval(timer);
                 });
-                const status = statusRes.data?.status;
-                isVehicleAsleep = status === "asleep";
-                if (debug) node.log(`Vehicle status on startup: ${status}`);
-
-                await doInitialRefresh(); // ✅ Always do one full refresh
-
-                if (isVehicleAsleep) {
-                    if (debug) node.log("Vehicle is asleep — starting status polling only");
-                    statusPollTimer = setInterval(pollVehicleStatus, 60000);
-                } else {
-                    if (debug) node.log("Vehicle is awake — starting WebSocket and periodic refresh");
-                    connectWebSocket();
-                    startPeriodicRefresh();
-                }
-
-                updateStatus();
-            } catch (err) {
-                node.error("Initial sleep check failed: " + err.message);
-                updateStatus();
-            }
+            inactivityWatchdogTimer = refreshTimer = statusPollTimer = null;
         }
 
-        async function doInitialRefresh() {
-            try {
-                const url = `${baseUrl}/${vin}/state`;
-                if (debug) node.log(`Performing initial full refresh from: ${url}`);
-                const res = await axios.get(url, {
-                    headers: { Authorization: `Bearer ${queryToken}` },
-                    timeout: 10000
-                });
-                const data = res.data;
-                refreshHealthy = true;
-                // Optionally publish or cache data here
-            } catch (err) {
-                refreshHealthy = false;
-                node.error("Initial refresh failed: " + err.message);
-            }
+        function isAllowed(key) {
+            const exact = whitelist.some(w => key === w);
+            const white = whitelist.length === 0 || whitelist.some(w => key.startsWith(w));
+            const black = blacklist.some(b => key.startsWith(b));
+            return exact || (white && !black);
+        }
+
+        function safeReconnect(reason = "unspecified") {
+            reconnectAttempts++;
+            const delay = Math.min(30000, 1000 * Math.pow(2, reconnectAttempts)); // max 30s
+            if (debug) node.log(`Reconnecting WebSocket in ${delay / 1000}s due to ${reason} (attempt ${reconnectAttempts})`);
+            setTimeout(() => {
+                connectWebSocket();
+            }, delay);
         }
 
         function updateStatus() {
@@ -337,12 +314,24 @@ module.exports = function (RED) {
                 const issues = [];
                 if (!streamingHealthy && ws) issues.push("streaming");
                 if (!refreshHealthy) issues.push("refresh");
-                const fillColor = issues.length ? "red" : "yellow";
-                const shape = issues.length ? "ring" : "dot";
+                let fillColor, shape;
+
+                if (issues.length === 0) {
+                    fillColor = "yellow";
+                    shape = "dot";
+                } else if (issues.length === 1 && issues[0] === 'streaming') {
+                    fillColor = "yellow";
+                    shape = "ring";
+                } else {
+                    fillColor = "red";
+                    shape = "ring";
+                }
+
                 const text = issues.length
                     ? `Error: ${issues.join(" & ")} failed. Next refresh: ${nextRefreshTime()}`
                     : `Waiting for data... Next refresh: ${nextRefreshTime()}`;
                 node.status({ fill: fillColor, shape, text });
+                if (debug) node.log(text);
             }
         }
 
@@ -350,10 +339,7 @@ module.exports = function (RED) {
             try {
                 const url = `${baseUrl}/${vin}/status`;
                 if (debug) node.log(`Polling vehicle status from: ${url}`);
-                const res = await axios.get(url, {
-                    headers: { Authorization: `Bearer ${queryToken}` },
-                    timeout: 10000
-                });
+                const res = await api.get(url);
                 const status = res.data?.status;
                 if (debug) node.log(`Vehicle status: ${status}`);
 
@@ -376,7 +362,6 @@ module.exports = function (RED) {
                     if (ws && ws.readyState === WebSocket.OPEN) ws.terminate();
                     statusPollTimer = setInterval(pollVehicleStatus, 60000);
                 }
-
                 updateStatus();
             } catch (err) {
                 node.error("Error polling vehicle status: " + err.message);
@@ -442,6 +427,7 @@ module.exports = function (RED) {
             ws.on('open', () => {
                 isVehicleAsleep = false;
                 streamingHealthy = true;
+                isStarting = false;
                 lastStreamingMessageTime = Date.now();
                 reconnectAttempts = 0;
                 reconnectInProgress = false;
@@ -457,7 +443,7 @@ module.exports = function (RED) {
                             if (debug) node.log("Streaming inactivity detected — assuming vehicle is asleep.");
                             isVehicleAsleep = true;
                             ws.terminate(); // force close
-                            if (inactivityWatchdogTimer) clearInterval(inactivityWatchdogTimer);
+                            clearTimers();
                             statusPollTimer = setInterval(pollVehicleStatus, 60000);
                         }
                     }
@@ -530,11 +516,7 @@ module.exports = function (RED) {
                                 node.log(`Streaming key ${key} had undefined value: ${JSON.stringify(item.value)}`);
                             }
 
-                            const isSpecificallyWhitelisted = whitelist.some(w => topicPath === w);
-                            const isWhitelisted = whitelist.length === 0 || whitelist.some(w => topicPath.startsWith(w));
-                            const isBlacklisted = blacklist.some(b => topicPath.startsWith(b));
-
-                            if (val !== undefined && (isSpecificallyWhitelisted || (isWhitelisted && !isBlacklisted))) {
+                            if (val !== undefined && isAllowed(topicPath)) {
                                 if (mappedPath) {
                                     const msgOut = {
                                         topic: `${topicRoot}/${vehicleName}/${topicPath}`,
@@ -634,14 +616,11 @@ module.exports = function (RED) {
                 try {
                     const url = `${baseUrl}/${vin}/state`;
                     if (debug) node.log(`Requesting vehicle state from: ${url}`);
-                    const res = await axios.get(url, {
-                        headers: { Authorization: `Bearer ${queryToken}` },
-                        timeout: 10000
-                    });
+                    const res = await api.get(url);
                     const data = res.data;
 
                     if (data?.status === "asleep") {
-                        if (debug) node.log("Vehicle is asleep — skipping refresh and switching to status polling");
+                        //if (debug) node.log("Vehicle is asleep — skipping refresh and switching to status polling");
 
                         if (refreshTimer) {
                             clearInterval(refreshTimer);
@@ -660,6 +639,7 @@ module.exports = function (RED) {
                                 statusPollTimer = setInterval(pollVehicleStatus, 60000);
                                 if (debug) node.log("Started status polling timer");
                             }
+                            isStarting = false;
                             updateStatus();
                         }
 
@@ -667,10 +647,12 @@ module.exports = function (RED) {
                     }
 
                     // Start the timer only after confirming vehicle is awake
-                    if (!timerInitialized) {
+                    if (!timerInitialized && !isVehicleAsleep && data?.state !== "asleep") {
                         refreshTimer = setInterval(doRefresh, refreshInterval * 1000);
                         timerInitialized = true;
                         if (debug) node.log(`Refresh timer started with interval ${refreshInterval}s`);
+                    } else {
+                        updateStatus();
                     }
 
                     const flattened = flattenObject(data);
@@ -680,11 +662,7 @@ module.exports = function (RED) {
                         const groupedPayload = {};
                         for (const key in flattened) {
                             const val = flattened[key];
-                            const isSpecificallyWhitelisted = whitelist.some(w => key === w);
-                            const isWhitelisted = whitelist.length === 0 || whitelist.some(w => key.startsWith(w));
-                            const isBlacklisted = blacklist.some(b => key.startsWith(b));
-
-                            if (isSpecificallyWhitelisted || (isWhitelisted && !isBlacklisted)) {
+                            if (isAllowed(key)) {
                                 groupedPayload[key] = convertUnits(key, val);
                             }
                         }
@@ -695,11 +673,7 @@ module.exports = function (RED) {
                     } else {
                         for (const key in flattened) {
                             const val = flattened[key];
-                            const isSpecificallyWhitelisted = whitelist.some(w => key === w);
-                            const isWhitelisted = whitelist.length === 0 || whitelist.some(w => key.startsWith(w));
-                            const isBlacklisted = blacklist.some(b => key.startsWith(b));
-
-                            if (isSpecificallyWhitelisted || (isWhitelisted && !isBlacklisted)) {
+                            if (isAllowed(key)) {
                                 const topicPath = key;
                                 const msgOut = {
                                     topic: `${topicRoot}/${vehicleName}/${topicPath}`,
@@ -763,13 +737,10 @@ module.exports = function (RED) {
                 isRunning = false;
                 manualStop = true;
                 if (ws) ws.close();
-                if (inactivityWatchdogTimer) clearInterval(inactivityWatchdogTimer);
-                if (refreshTimer) clearInterval(refreshTimer);
-                if (heartbeatTimer) clearInterval(heartbeatTimer);
-                if (statusPollTimer) {
-                    clearInterval(statusPollTimer);
-                    statusPollTimer = null;
-                    if (debug) node.log("Stopped status polling timer");
+                clearTimers();
+                if (heartbeatTimer) {
+                    clearInterval(heartbeatTimer);
+                    heartbeatTimer = null;
                 }
                 updateStatus();
                 if (debug) node.log("Streaming stopped");
@@ -779,7 +750,7 @@ module.exports = function (RED) {
                 if (!isRunning) {
                     isRunning = true;
                     isStarting = true;
-                    initialSleepCheck();
+                    startPeriodicRefresh();
                     startHeartbeat();
                     updateStatus();
                     if (debug) node.log("Streaming started");
@@ -790,7 +761,7 @@ module.exports = function (RED) {
         if (autoStart) {
             isRunning = true;
             isStarting = true;
-            initialSleepCheck();
+            startPeriodicRefresh();
             startHeartbeat();
             updateStatus();
             if (debug) node.log("Auto-start enabled: streaming started");
@@ -799,12 +770,10 @@ module.exports = function (RED) {
         node.on('close', () => {
             isRunning = false;
             if (ws) ws.terminate();
-            if (inactivityWatchdogTimer) clearInterval(inactivityWatchdogTimer);
-            if (refreshTimer) clearInterval(refreshTimer);
-            if (heartbeatTimer) clearInterval(heartbeatTimer);
-            if (statusPollTimer) {
-                clearInterval(statusPollTimer);
-                statusPollTimer = null;
+            clearTimers();
+            if (heartbeatTimer) {
+                clearInterval(heartbeatTimer);
+                heartbeatTimer = null;
             }
         });
     }
