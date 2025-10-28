@@ -12,7 +12,7 @@
       "tessie-streaming": "tessie-streaming.js"
     }
   },
-  "version": "1.0.12",
+  "version": "1.0.13",
   "description": "Tessie API nodes for Node-RED",
   "repository": {
     "type": "git",
